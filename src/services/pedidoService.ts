@@ -4,8 +4,8 @@ export type PedidoResumo = {
   id: number;
   numero: string;
   cliente: string;
-  tipo: "Orcamento" | "Pedido" | string;
-  status: "Orcado" | "Aberto" | "Finalizado" | "Cancelado" | string;
+  tipo: "Orcamento" | "Pedido" | string | number;
+  status: "Orcado" | "Aberto" | "Finalizado" | "Cancelado" | string | number;
   dataPedido: string;
   dataEntrega: string | null;
   total: number;
