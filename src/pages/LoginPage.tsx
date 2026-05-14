@@ -1,16 +1,43 @@
 import { EyeOff, Lock, Mail } from "lucide-react";
+import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ApiError } from "@/services/api";
+import { login, type AuthUser } from "@/services/authService";
 
 type LoginPageProps = {
   theme: "light" | "dark";
   toggleTheme: () => void;
-  onLogin: () => void;
+  onLogin: (user: AuthUser) => void;
 };
 
 export function LoginPage({ theme, toggleTheme, onLogin }: LoginPageProps) {
+  const [email, setEmail] = useState("maria@print.com");
+  const [senha, setSenha] = useState("123456789");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      const user = await login({ email, senha });
+      onLogin(user);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setError("Email ou senha inválidos.");
+      } else {
+        setError("Não foi possível conectar com a API. Confira se o backend está rodando.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   return (
     <div className="grid min-h-screen place-items-center bg-slate-950 p-4 text-white">
       <div className="absolute right-5 top-5">
@@ -35,12 +62,18 @@ export function LoginPage({ theme, toggleTheme, onLogin }: LoginPageProps) {
             <p className="text-sm text-muted-foreground">Acesse com seu email e senha</p>
           </div>
 
-          <div className="space-y-4">
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="space-y-2">
               <span className="field-label">E-mail</span>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 text-muted-foreground" size={17} />
-                <Input className="pl-10" defaultValue="maria@print.com" />
+                <Input
+                  className="pl-10"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  type="email"
+                  autoComplete="email"
+                />
               </div>
             </label>
 
@@ -48,15 +81,23 @@ export function LoginPage({ theme, toggleTheme, onLogin }: LoginPageProps) {
               <span className="field-label">Senha</span>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 text-muted-foreground" size={17} />
-                <Input className="pl-10 pr-10" type="password" defaultValue="123456789" />
+                <Input
+                  className="pl-10 pr-10"
+                  type="password"
+                  value={senha}
+                  onChange={(event) => setSenha(event.target.value)}
+                  autoComplete="current-password"
+                />
                 <EyeOff className="absolute right-3 top-3 text-muted-foreground" size={17} />
               </div>
             </label>
 
-            <Button className="w-full" onClick={onLogin}>
-              Entrar
+            {error && <p className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm font-semibold text-destructive">{error}</p>}
+
+            <Button className="w-full" type="submit" disabled={isLoading}>
+              {isLoading ? "Entrando..." : "Entrar"}
             </Button>
-          </div>
+          </form>
         </section>
       </Card>
     </div>

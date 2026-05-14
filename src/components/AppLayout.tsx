@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
+import type { AuthUser } from "@/services/authService";
 
 export type Page =
   | "dashboard"
@@ -29,22 +30,23 @@ type AppLayoutProps = {
   setPage: (page: Page) => void;
   theme: "light" | "dark";
   toggleTheme: () => void;
+  user: AuthUser;
   onLogout: () => void;
   children: React.ReactNode;
 };
 
 const navItems = [
-  { page: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
-  { page: "pedidos" as const, label: "Pedidos", icon: ClipboardList },
-  { page: "editar-orcamento" as const, label: "Orçamentos", icon: FileClock },
-  { page: "estoque" as const, label: "Estoque", icon: Package },
-  { page: "financeiro" as const, label: "Financeiro", icon: BarChart3 },
-  { page: "usuarios" as const, label: "Usuários", icon: Users },
-  { page: "logs" as const, label: "Logs", icon: ScrollText },
-  { page: "conta" as const, label: "Minha conta", icon: KeyRound }
+  { page: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] },
+  { page: "pedidos" as const, label: "Pedidos", icon: ClipboardList, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] },
+  { page: "editar-orcamento" as const, label: "Orçamentos", icon: FileClock, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] },
+  { page: "estoque" as const, label: "Estoque", icon: Package, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] },
+  { page: "financeiro" as const, label: "Financeiro", icon: BarChart3, perfis: ["ADMIN", "GERENTE"] },
+  { page: "usuarios" as const, label: "Usuários", icon: Users, perfis: ["ADMIN"] },
+  { page: "logs" as const, label: "Logs", icon: ScrollText, perfis: ["ADMIN", "GERENTE"] },
+  { page: "conta" as const, label: "Minha conta", icon: KeyRound, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] }
 ];
 
-export function AppLayout({ page, setPage, theme, toggleTheme, onLogout, children }: AppLayoutProps) {
+export function AppLayout({ page, setPage, theme, toggleTheme, user, onLogout, children }: AppLayoutProps) {
   return (
     <div className="page-shell grid min-h-screen lg:grid-cols-[260px_1fr]">
       <aside className="border-r bg-slate-950 text-white dark:bg-slate-950">
@@ -63,7 +65,7 @@ export function AppLayout({ page, setPage, theme, toggleTheme, onLogout, childre
           </div>
 
           <nav className="space-y-1">
-            {navItems.map((item) => {
+            {navItems.filter((item) => item.perfis.includes(user.perfil)).map((item) => {
               const Icon = item.icon;
               return (
                 <button
@@ -84,8 +86,8 @@ export function AppLayout({ page, setPage, theme, toggleTheme, onLogout, childre
 
           <div className="mt-auto space-y-4 border-t border-white/15 pt-5">
             <div>
-              <p className="text-sm font-bold">Maria Atendente</p>
-              <p className="text-xs text-slate-300">Gerente</p>
+              <p className="text-sm font-bold">{user.nome}</p>
+              <p className="text-xs text-slate-300">{user.perfil}</p>
             </div>
             <Button variant="secondary" className="w-full" onClick={onLogout}>
               <LogOut size={16} />

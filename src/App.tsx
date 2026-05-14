@@ -10,10 +10,11 @@ import { LogsPage } from "@/pages/LogsPage";
 import { PedidoFormPage } from "@/pages/PedidoFormPage";
 import { PedidosPage } from "@/pages/PedidosPage";
 import { UsuariosPage } from "@/pages/UsuariosPage";
+import type { AuthUser } from "@/services/authService";
 
 export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [page, setPage] = useState<Page>("dashboard");
 
   useEffect(() => {
@@ -22,8 +23,8 @@ export default function App() {
 
   const toggleTheme = () => setTheme((current) => (current === "dark" ? "light" : "dark"));
 
-  if (!isAuthenticated) {
-    return <LoginPage theme={theme} toggleTheme={toggleTheme} onLogin={() => setIsAuthenticated(true)} />;
+  if (!user) {
+    return <LoginPage theme={theme} toggleTheme={toggleTheme} onLogin={setUser} />;
   }
 
   return (
@@ -32,7 +33,8 @@ export default function App() {
       setPage={setPage}
       theme={theme}
       toggleTheme={toggleTheme}
-      onLogout={() => setIsAuthenticated(false)}
+      user={user}
+      onLogout={() => setUser(null)}
     >
       {page === "dashboard" && <DashboardPage setPage={setPage} />}
       {page === "pedidos" && <PedidosPage setPage={setPage} />}
