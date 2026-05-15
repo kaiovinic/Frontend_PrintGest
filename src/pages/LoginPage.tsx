@@ -1,9 +1,9 @@
-import { EyeOff, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { ApiError } from "@/services/api";
 import { login, type AuthUser } from "@/services/authService";
 
@@ -16,6 +16,7 @@ type LoginPageProps = {
 export function LoginPage({ theme, toggleTheme, onLogin }: LoginPageProps) {
   const [email, setEmail] = useState("maria@print.com");
   const [senha, setSenha] = useState("123456789");
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +45,7 @@ export function LoginPage({ theme, toggleTheme, onLogin }: LoginPageProps) {
         <ThemeToggle theme={theme} onToggle={toggleTheme} />
       </div>
 
-      <Card className="grid w-full max-w-5xl overflow-hidden border-slate-800 bg-card shadow-2xl lg:grid-cols-[1fr_1.15fr]">
+      <Card className="grid w-full max-w-5xl overflow-hidden border-slate-800 bg-card text-card-foreground shadow-2xl lg:grid-cols-[1fr_1.15fr]">
         <section className="bg-slate-950 p-8 text-white">
           <div className="mb-16 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-3 text-slate-950">
             <span className="text-3xl font-black text-primary">Print</span>
@@ -83,12 +84,19 @@ export function LoginPage({ theme, toggleTheme, onLogin }: LoginPageProps) {
                 <Lock className="absolute left-3 top-3 text-muted-foreground" size={17} />
                 <Input
                   className="pl-10 pr-10"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={senha}
                   onChange={(event) => setSenha(event.target.value)}
                   autoComplete="current-password"
                 />
-                <EyeOff className="absolute right-3 top-3 text-muted-foreground" size={17} />
+                <button
+                  type="button"
+                  className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword((current) => !current)}
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                >
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
               </div>
             </label>
 

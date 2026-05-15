@@ -1,15 +1,24 @@
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { despesas, pedidos } from "@/data/mockData";
+import { listarDespesas, type Despesa } from "@/services/financeiroService";
+import { listarPedidos, type PedidoResumo } from "@/services/pedidoService";
+import { formatCurrency } from "@/utils/formatters";
 
 export function FinanceiroPage() {
   const [tab, setTab] = useState("Vendas");
+  const [pedidos, setPedidos] = useState<PedidoResumo[]>([]);
+  const [despesas, setDespesas] = useState<Despesa[]>([]);
+
+  useEffect(() => {
+    listarPedidos().then(setPedidos).catch(() => setPedidos([]));
+    listarDespesas().then(setDespesas).catch(() => setDespesas([]));
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -22,29 +31,33 @@ export function FinanceiroPage() {
 
       <Card>
         <CardContent className="grid gap-3 p-5 md:grid-cols-[1fr_1fr_1fr_auto]">
-          <Input defaultValue="01/05/2026" />
-          <Input defaultValue="31/05/2026" />
+          <Input type="date" />
+          <Input type="date" />
           <Input defaultValue="2026" />
           <Button variant="outline">Limpar filtro</Button>
         </CardContent>
       </Card>
 
-      {tab === "Vendas" && <Vendas />}
-      {tab === "Entradas" && <Entradas />}
-      {tab === "Despesas" && <Despesas />}
-      {tab === "Gráficos" && <Graficos />}
-      {tab === "Clientes" && <Clientes />}
+      {tab === "Vendas" && <Vendas pedidos={pedidos} />}
+      {tab === "Entradas" && <Entradas pedidos={pedidos} />}
+      {tab === "Despesas" && <Despesas despesas={despesas} />}
+      {tab === "Gráficos" && <Graficos pedidos={pedidos} />}
+      {tab === "Clientes" && <Clientes pedidos={pedidos} />}
     </div>
   );
 }
 
-function Vendas() {
+function Vendas({ pedidos }: { pedidos: PedidoResumo[] }) {
+  const receita = pedidos.reduce((sum, pedido) => sum + pedido.valorPago, 0);
+  const pagos = pedidos.filter((pedido) => pedido.valorPago > 0).length;
+  const ticket = pagos > 0 ? receita / pagos : 0;
+
   return (
     <>
       <section className="grid gap-4 md:grid-cols-3">
-        <Metric title="Receita mês" value="R$ 22.850" tone="green" />
-        <Metric title="Pedidos pagos" value="38" tone="cyan" />
-        <Metric title="Ticket médio" value="R$ 601" tone="amber" />
+        <Metric title="Receita mês" value={formatCurrency(receita)} tone="green" />
+        <Metric title="Pedidos pagos" value={String(pagos)} tone="cyan" />
+        <Metric title="Ticket médio" value={formatCurrency(ticket)} tone="amber" />
       </section>
       <Card>
         <CardHeader>
@@ -56,17 +69,17 @@ function Vendas() {
               <TableRow>
                 <TableHead>Pedido</TableHead>
                 <TableHead>Cliente</TableHead>
-                <TableHead>Forma</TableHead>
-                <TableHead>Valor</TableHead>
+                <TableHead>Valor pago</TableHead>
+                <TableHead>Saldo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pedidos.slice(1, 4).map((pedido) => (
+              {pedidos.map((pedido) => (
                 <TableRow key={pedido.id}>
-                  <TableCell>{pedido.id}</TableCell>
+                  <TableCell>{pedido.numero}</TableCell>
                   <TableCell>{pedido.cliente}</TableCell>
-                  <TableCell>PIX</TableCell>
-                  <TableCell>{pedido.total}</TableCell>
+                  <TableCell>{formatCurrency(pedido.valorPago)}</TableCell>
+                  <TableCell>{formatCurrency(pedido.saldoDevedor)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -77,22 +90,23 @@ function Vendas() {
   );
 }
 
-function Entradas() {
+function Entradas({ pedidos }: { pedidos: PedidoResumo[] }) {
+  const total = pedidos.reduce((sum, pedido) => sum + pedido.valorPago, 0);
   return (
     <Card>
       <CardHeader>
         <CardTitle>Entradas de dinheiro</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-3">
-        <Metric title="PIX" value="R$ 13.600" tone="cyan" />
-        <Metric title="Dinheiro" value="R$ 3.250" tone="green" />
-        <Metric title="Cartão" value="R$ 6.000" tone="amber" />
+        <Metric title="Entradas registradas" value={formatCurrency(total)} tone="cyan" />
+        <Metric title="Pedidos com entrada" value={String(pedidos.filter((pedido) => pedido.valorPago > 0).length)} tone="green" />
+        <Metric title="Saldo a receber" value={formatCurrency(pedidos.reduce((sum, pedido) => sum + pedido.saldoDevedor, 0))} tone="amber" />
       </CardContent>
     </Card>
   );
 }
 
-function Despesas() {
+function Despesas({ despesas }: { despesas: Despesa[] }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
       <Card>
@@ -103,7 +117,7 @@ function Despesas() {
           <Input placeholder="Categoria: luz, água, contador..." />
           <Input placeholder="Descrição" />
           <Input placeholder="Valor" />
-          <Input placeholder="Vencimento" />
+          <Input type="date" placeholder="Vencimento" />
           <Button>
             <Plus size={16} />
             Lançar
@@ -124,12 +138,12 @@ function Despesas() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {despesas.map((despesa) => (
-                <TableRow key={despesa.tipo}>
-                  <TableCell>{despesa.tipo}</TableCell>
-                  <TableCell>{despesa.valor}</TableCell>
+              {despesas.map((despesa, index) => (
+                <TableRow key={`${despesa.id ?? index}-${despesa.categoria ?? despesa.tipo}`}>
+                  <TableCell>{despesa.categoria ?? despesa.tipo ?? despesa.descricao}</TableCell>
+                  <TableCell>{typeof despesa.valor === "number" ? formatCurrency(despesa.valor) : despesa.valor}</TableCell>
                   <TableCell>
-                    <Badge tone={despesa.status === "Pago" ? "success" : "info"}>{despesa.status}</Badge>
+                    <Badge tone={despesa.status === "Pago" || despesa.status === "Finalizado" ? "success" : "info"}>{despesa.status}</Badge>
                   </TableCell>
                 </TableRow>
               ))}
@@ -141,19 +155,34 @@ function Despesas() {
   );
 }
 
-function Graficos() {
+function Graficos({ pedidos }: { pedidos: PedidoResumo[] }) {
+  const bars = pedidos.slice(0, 7).map((pedido) => {
+    const height = Math.max(12, Math.min(40, Math.round(pedido.valorPago / 100)));
+    return `h-${height} bg-primary`;
+  });
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 lg:grid-cols-2">
-        <BarCard title="Entradas x saídas" bars={["h-16 bg-emerald-600", "h-24 bg-emerald-600", "h-20 bg-emerald-600", "h-28 bg-emerald-600", "h-12 bg-rose-600", "h-16 bg-rose-600"]} />
-        <BarCard title="Receita anual" bars={["h-12", "h-16", "h-24", "h-20", "h-32", "h-28", "h-36"].map((h) => `${h} bg-primary`)} />
+        <BarCard title="Entradas x saídas" bars={bars.length ? bars : ["h-12 bg-primary"]} />
+        <BarCard title="Receita anual" bars={bars.length ? bars : ["h-12 bg-primary"]} />
       </div>
-      <Clientes />
+      <Clientes pedidos={pedidos} />
     </div>
   );
 }
 
-function Clientes() {
+function Clientes({ pedidos }: { pedidos: PedidoResumo[] }) {
+  const clientes = useMemo(() => {
+    const totals = new Map<string, number>();
+    pedidos.forEach((pedido) => totals.set(pedido.cliente, (totals.get(pedido.cliente) ?? 0) + pedido.total));
+    const totalGeral = Array.from(totals.values()).reduce((sum, value) => sum + value, 0);
+    return Array.from(totals.entries())
+      .map(([cliente, valor]) => ({ cliente, valor, percentual: totalGeral > 0 ? Math.round((valor / totalGeral) * 100) : 0 }))
+      .sort((a, b) => b.valor - a.valor)
+      .slice(0, 10);
+  }, [pedidos]);
+
   return (
     <Card>
       <CardHeader>
@@ -169,16 +198,11 @@ function Clientes() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {[
-              ["Print Eventos", "R$ 4.800", "21%"],
-              ["Mercado Sol", "R$ 3.200", "14%"],
-              ["Clínica Vida", "R$ 2.750", "12%"],
-              ["Grupo Alfa", "R$ 2.400", "10%"]
-            ].map(([cliente, valor, percent]) => (
-              <TableRow key={cliente}>
-                <TableCell>{cliente}</TableCell>
-                <TableCell>{valor}</TableCell>
-                <TableCell>{percent}</TableCell>
+            {clientes.map((cliente) => (
+              <TableRow key={cliente.cliente}>
+                <TableCell>{cliente.cliente}</TableCell>
+                <TableCell>{formatCurrency(cliente.valor)}</TableCell>
+                <TableCell>{cliente.percentual}%</TableCell>
               </TableRow>
             ))}
           </TableBody>

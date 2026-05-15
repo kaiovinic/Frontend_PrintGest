@@ -1,12 +1,23 @@
 import { Ban, KeyRound, LockOpen, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { usuarios } from "@/data/mockData";
+import { listarUsuarios, type Usuario } from "@/services/usuarioService";
 
 export function UsuariosPage() {
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    listarUsuarios()
+      .then(setUsuarios)
+      .catch(() => setUsuarios([]))
+      .finally(() => setIsLoading(false));
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -47,28 +58,34 @@ export function UsuariosPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {usuarios.map((usuario) => (
-                <TableRow key={usuario.email}>
-                  <TableCell>{usuario.nome}</TableCell>
-                  <TableCell>{usuario.email}</TableCell>
-                  <TableCell>{usuario.perfil}</TableCell>
-                  <TableCell>
-                    <Badge tone={usuario.status === "Ativo" ? "success" : "danger"}>{usuario.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button size="sm" variant="outline">
-                      <KeyRound size={15} />
-                      Reset
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Button size="sm" variant={usuario.status === "Ativo" ? "destructive" : "secondary"}>
-                      {usuario.status === "Ativo" ? <Ban size={15} /> : <LockOpen size={15} />}
-                      {usuario.status === "Ativo" ? "Bloquear" : "Desbloquear"}
-                    </Button>
-                  </TableCell>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={6}>Carregando usuários...</TableCell>
                 </TableRow>
-              ))}
+              )}
+              {!isLoading &&
+                usuarios.map((usuario) => (
+                  <TableRow key={usuario.email}>
+                    <TableCell>{usuario.nome}</TableCell>
+                    <TableCell>{usuario.email}</TableCell>
+                    <TableCell>{usuario.perfil}</TableCell>
+                    <TableCell>
+                      <Badge tone={usuario.status === "ATIVO" || usuario.status === "Ativo" ? "success" : "danger"}>{usuario.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="outline">
+                        <KeyRound size={15} />
+                        Reset
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <Button size="sm" variant={usuario.status === "ATIVO" || usuario.status === "Ativo" ? "destructive" : "secondary"}>
+                        {usuario.status === "ATIVO" || usuario.status === "Ativo" ? <Ban size={15} /> : <LockOpen size={15} />}
+                        {usuario.status === "ATIVO" || usuario.status === "Ativo" ? "Bloquear" : "Desbloquear"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </CardContent>

@@ -8,7 +8,12 @@ type ThemeToggleProps = {
 
 export function ThemeToggle({ theme, onToggle }: ThemeToggleProps) {
   return (
-    <Button variant="outline" onClick={onToggle} aria-label="Alternar tema">
+    <Button
+      variant="outline"
+      className="bg-card text-foreground hover:bg-secondary hover:text-secondary-foreground"
+      onClick={onToggle}
+      aria-label="Alternar tema"
+    >
       {theme === "dark" ? <Moon size={16} /> : <Sun size={16} />}
       {theme === "dark" ? "Escuro" : "Claro"}
     </Button>

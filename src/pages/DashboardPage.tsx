@@ -8,7 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { listarPedidosRecentes, type PedidoResumo } from "@/services/pedidoService";
 import { formatCurrency, formatDate, formatStatusPedido, formatTipoPedido } from "@/utils/formatters";
 
-export function DashboardPage({ setPage }: { setPage: (page: Page) => void }) {
+type Navigate = (page: Page, pedido?: PedidoResumo | null) => void;
+
+export function DashboardPage({ setPage }: { setPage: Navigate }) {
   const [pedidos, setPedidos] = useState<PedidoResumo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,7 @@ export function DashboardPage({ setPage }: { setPage: (page: Page) => void }) {
         </div>
         <Button onClick={() => setPage("novo-pedido")}>
           <Plus size={16} />
-          Novo orcamento
+          Novo Pedido
         </Button>
       </div>
 
@@ -88,7 +90,6 @@ export function DashboardPage({ setPage }: { setPage: (page: Page) => void }) {
                 !error &&
                 pedidos.slice(0, 5).map((pedido) => {
                   const status = formatStatusPedido(pedido.status);
-                  const tipo = formatTipoPedido(pedido.tipo);
 
                   return (
                     <TableRow key={pedido.id}>
@@ -102,8 +103,8 @@ export function DashboardPage({ setPage }: { setPage: (page: Page) => void }) {
                       <TableCell>{pedido.criadoPor}</TableCell>
                       <TableCell>{formatDate(pedido.dataEntrega)}</TableCell>
                       <TableCell>
-                        <Button size="sm" variant="outline" onClick={() => setPage(tipo === "Orçamento" ? "editar-orcamento" : "pedidos")}>
-                          {tipo === "Orçamento" ? "Editar" : "Ver"}
+                        <Button size="sm" variant="outline" onClick={() => setPage("novo-pedido", pedido)}>
+                          Editar
                         </Button>
                       </TableCell>
                     </TableRow>

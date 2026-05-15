@@ -82,7 +82,7 @@ describe("PrintGest frontend", () => {
 
     expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(screen.getByText("Pedidos recentes")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Novo or/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Novo Pedido/i })).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining("/auth/login"),
       expect.objectContaining({ method: "POST" })

@@ -1,9 +1,20 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { logs } from "@/data/mockData";
+import { listarLogs, type LogSistema } from "@/services/logService";
 
 export function LogsPage() {
+  const [logs, setLogs] = useState<LogSistema[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    listarLogs()
+      .then(setLogs)
+      .catch(() => setLogs([]))
+      .finally(() => setIsLoading(false));
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -14,8 +25,8 @@ export function LogsPage() {
       <Card>
         <CardContent className="grid gap-3 p-5 md:grid-cols-4">
           <Input placeholder="Entidade" />
-          <Input placeholder="Data início" />
-          <Input placeholder="Data final" />
+          <Input type="date" placeholder="Data início" />
+          <Input type="date" placeholder="Data final" />
           <Input placeholder="Usuário" />
         </CardContent>
       </Card>
@@ -35,14 +46,20 @@ export function LogsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {logs.map((log) => (
-                <TableRow key={`${log.data}-${log.acao}`}>
-                  <TableCell>{log.data}</TableCell>
-                  <TableCell>{log.usuario}</TableCell>
-                  <TableCell>{log.acao}</TableCell>
-                  <TableCell>{log.entidade}</TableCell>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={4}>Carregando logs...</TableCell>
                 </TableRow>
-              ))}
+              )}
+              {!isLoading &&
+                logs.map((log) => (
+                  <TableRow key={`${log.criadoEm ?? log.data}-${log.acao}-${log.entidade}`}>
+                    <TableCell>{log.criadoEm ?? log.data ?? "-"}</TableCell>
+                    <TableCell>{log.usuario ?? "-"}</TableCell>
+                    <TableCell>{log.acao}</TableCell>
+                    <TableCell>{log.entidade}</TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </CardContent>
