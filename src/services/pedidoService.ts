@@ -19,6 +19,11 @@ export type PedidoDetalhe = {
   numero: string;
   clienteId: number;
   cliente: string;
+  empresa: string | null;
+  cpfCnpj: string | null;
+  telefone: string | null;
+  endereco: string | null;
+  cidade: string | null;
   usuarioId: number;
   tipo: string | number;
   status: string | number;
@@ -35,11 +40,27 @@ export type PedidoDetalhe = {
   total: number;
   valorPago: number;
   saldoDevedor: number;
+  itens: PedidoItemDetalhe[];
+};
+
+export type PedidoItemDetalhe = {
+  id: number;
+  descricao: string;
+  tamanho: string | null;
+  quantidade: number;
+  valorUnitario: number;
+  valorTotal: number;
 };
 
 export type PedidoPayload = {
   numero: string;
   clienteId: number;
+  clienteNome: string;
+  empresa: string | null;
+  cpfCnpj: string | null;
+  telefone: string | null;
+  endereco: string | null;
+  cidade: string | null;
   usuarioId: number;
   dataPedido: string;
   dataEntrega: string | null;
@@ -53,6 +74,15 @@ export type PedidoPayload = {
   observacao: string | null;
   total: number;
   valorPago: number;
+  itens: PedidoItemPayload[];
+};
+
+export type PedidoItemPayload = {
+  descricao: string;
+  tamanho: string | null;
+  quantidade: number;
+  valorUnitario: number;
+  valorTotal: number;
 };
 
 export function listarPedidosRecentes() {

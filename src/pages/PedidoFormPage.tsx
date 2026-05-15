@@ -28,7 +28,7 @@ type ItemPedido = {
 type CondicaoPagamento = "Pago" | "Pagar na Entrega" | "Parcelado";
 
 export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | null; usuarioId: number }) {
-  const [clienteId, setClienteId] = useState(1);
+  const [clienteId, setClienteId] = useState(0);
   const [cliente, setCliente] = useState(pedido?.cliente ?? "");
   const [empresa, setEmpresa] = useState("");
   const [cpfCnpj, setCpfCnpj] = useState("");
@@ -90,6 +90,12 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     const payload: PedidoPayload = {
       numero: pedido?.numero ?? String(Date.now()).slice(-6).padStart(6, "0"),
       clienteId,
+      clienteNome: cliente,
+      empresa: empresa || null,
+      cpfCnpj: cpfCnpj || null,
+      telefone: telefone || null,
+      endereco: endereco || null,
+      cidade: cidade || null,
       usuarioId,
       dataPedido,
       dataEntrega: dataEntrega || null,
@@ -102,7 +108,16 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       tamanhosFemininos: tamanhosFemininos || null,
       observacao: observacao || null,
       total: totalGeral,
-      valorPago: parcelas[0]?.valor ?? 0
+      valorPago: parcelas[0]?.valor ?? 0,
+      itens: items
+        .filter((item) => item.descricao.trim() || Number(item.quantidade || 0) > 0 || item.tamanho.trim())
+        .map((item) => ({
+          descricao: item.descricao.trim(),
+          tamanho: item.tamanho.trim() || null,
+          quantidade: Number(item.quantidade || 0),
+          valorUnitario: parseCurrency(item.precoUnitario),
+          valorTotal: totalItem(item)
+        }))
     };
 
     try {
@@ -131,7 +146,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
 
   function limparFormulario() {
     setCliente("");
-    setClienteId(1);
+    setClienteId(0);
     setEmpresa("");
     setCpfCnpj("");
     setTelefone("");
@@ -154,6 +169,11 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   function preencherComDetalhe(detalhe: PedidoDetalhe) {
     setClienteId(detalhe.clienteId);
     setCliente(detalhe.cliente);
+    setEmpresa(detalhe.empresa ?? "");
+    setCpfCnpj(maskCpfCnpj(detalhe.cpfCnpj ?? ""));
+    setTelefone(maskPhone(detalhe.telefone ?? ""));
+    setEndereco(detalhe.endereco ?? "");
+    setCidade(detalhe.cidade ?? "Alagoinhas");
     setTipo(formatTipoPedido(detalhe.tipo));
     setDataPedido(detalhe.dataPedido);
     setDataEntrega(detalhe.dataEntrega ?? "");
@@ -165,15 +185,17 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setTamanhosMasculinos(detalhe.tamanhosMasculinos ?? "");
     setTamanhosFemininos(detalhe.tamanhosFemininos ?? "");
     setPercentualEntrada(detalhe.total > 0 ? String(Math.round((detalhe.valorPago / detalhe.total) * 100)) : "50");
-    setItems([
-      {
-        id: Date.now(),
-        quantidade: "1",
-        tamanho: "",
-        descricao: `Pedido ${detalhe.numero} - ${detalhe.cliente}`,
-        precoUnitario: formatCurrency(detalhe.total)
-      }
-    ]);
+    setItems(
+      detalhe.itens?.length
+        ? detalhe.itens.map((item) => ({
+            id: item.id,
+            quantidade: String(item.quantidade),
+            tamanho: item.tamanho ?? "",
+            descricao: item.descricao,
+            precoUnitario: formatCurrency(item.valorUnitario)
+          }))
+        : [{ id: Date.now(), quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]
+    );
   }
 
   return (
