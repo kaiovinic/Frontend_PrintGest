@@ -1,12 +1,21 @@
-import { Calculator, Plus, Save, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Plus, Save, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { PedidoResumo } from "@/services/pedidoService";
-import { formatCurrency, formatDate, formatTipoPedido, maskCpfCnpj, maskCurrency, maskPhone, parseCurrency } from "@/utils/formatters";
+import {
+  atualizarOrcamento,
+  atualizarPedido,
+  criarOrcamento,
+  criarPedido,
+  obterPedido,
+  type PedidoDetalhe,
+  type PedidoPayload,
+  type PedidoResumo
+} from "@/services/pedidoService";
+import { formatCurrency, formatTipoPedido, maskCpfCnpj, maskCurrency, maskPhone, parseCurrency } from "@/utils/formatters";
 
 type ItemPedido = {
   id: number;
@@ -18,7 +27,8 @@ type ItemPedido = {
 
 type CondicaoPagamento = "Pago" | "Pagar na Entrega" | "Parcelado";
 
-export function PedidoFormPage({ pedido }: { pedido?: PedidoResumo | null }) {
+export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | null; usuarioId: number }) {
+  const [clienteId, setClienteId] = useState(1);
   const [cliente, setCliente] = useState(pedido?.cliente ?? "");
   const [empresa, setEmpresa] = useState("");
   const [cpfCnpj, setCpfCnpj] = useState("");
@@ -31,43 +41,139 @@ export function PedidoFormPage({ pedido }: { pedido?: PedidoResumo | null }) {
   const [formaPagamento, setFormaPagamento] = useState("PIX");
   const [condicaoPagamento, setCondicaoPagamento] = useState<CondicaoPagamento>("Parcelado");
   const [percentualEntrada, setPercentualEntrada] = useState("50");
-  const [reservaMensagem, setReservaMensagem] = useState<string | null>(null);
   const [observacao, setObservacao] = useState("");
+  const [frente, setFrente] = useState("");
+  const [fundo, setFundo] = useState("");
+  const [tamanhosMasculinos, setTamanhosMasculinos] = useState("");
+  const [tamanhosFemininos, setTamanhosFemininos] = useState("");
+  const [statusMensagem, setStatusMensagem] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [items, setItems] = useState<ItemPedido[]>([
     {
       id: 1,
-      quantidade: pedido ? "1" : "20",
-      tamanho: "M",
-      descricao: pedido ? `Pedido ${pedido.numero} - ${pedido.cliente}` : "Camisa branca com sublimação frente e fundo",
-      precoUnitario: pedido ? formatCurrency(pedido.total) : "R$ 32,00"
+      quantidade: pedido ? "1" : "",
+      tamanho: "",
+      descricao: pedido ? `Pedido ${pedido.numero} - ${pedido.cliente}` : "",
+      precoUnitario: pedido ? formatCurrency(pedido.total) : formatCurrency(0)
     }
   ]);
 
   const totalGeral = useMemo(() => items.reduce((sum, item) => sum + totalItem(item), 0), [items]);
   const parcelas = buildParcelas(condicaoPagamento, totalGeral, dataPedido, dataEntrega, Number(percentualEntrada || 0));
 
+  useEffect(() => {
+    if (!pedido?.id) {
+      return;
+    }
+
+    obterPedido(pedido.id)
+      .then(preencherComDetalhe)
+      .catch(() => setStatusMensagem("Não foi possível carregar os detalhes do pedido."));
+  }, [pedido?.id]);
+
   function updateItem(id: number, field: keyof ItemPedido, value: string) {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   }
 
   function addItem() {
-    setItems((current) => [
-      ...current,
-      { id: Date.now(), quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }
-    ]);
+    setItems((current) => [...current, { id: Date.now(), quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]);
   }
 
   function removeItem(id: number) {
     setItems((current) => (current.length === 1 ? current : current.filter((item) => item.id !== id)));
   }
 
-  function reservarMateriais() {
-    const quantidadeItens = items.filter((item) => Number(item.quantidade || 0) > 0 && item.descricao.trim()).length;
-    setReservaMensagem(
-      quantidadeItens > 0
-        ? `${quantidadeItens} item(ns) calculado(s). Ao salvar, o sistema deve reservar os materiais no estoque.`
-        : "Informe pelo menos um item com quantidade e descrição para reservar materiais."
-    );
+  async function salvar() {
+    setStatusMensagem(null);
+    setIsSaving(true);
+
+    const payload: PedidoPayload = {
+      numero: pedido?.numero ?? String(Date.now()).slice(-6).padStart(6, "0"),
+      clienteId,
+      usuarioId,
+      dataPedido,
+      dataEntrega: dataEntrega || null,
+      vendedor: null,
+      formaPagamento,
+      condicaoPagamento,
+      frente: frente || null,
+      fundo: fundo || null,
+      tamanhosMasculinos: tamanhosMasculinos || null,
+      tamanhosFemininos: tamanhosFemininos || null,
+      observacao: observacao || null,
+      total: totalGeral,
+      valorPago: parcelas[0]?.valor ?? 0
+    };
+
+    try {
+      if (pedido) {
+        if (tipo === "Pedido") {
+          await atualizarPedido(pedido.id, payload);
+        } else {
+          await atualizarOrcamento(pedido.id, payload);
+        }
+        setStatusMensagem("Registro atualizado com sucesso.");
+      } else if (tipo === "Pedido") {
+        await criarPedido(payload);
+        setStatusMensagem("Pedido criado com sucesso.");
+        limparFormulario();
+      } else {
+        await criarOrcamento(payload);
+        setStatusMensagem("Orçamento criado com sucesso.");
+        limparFormulario();
+      }
+    } catch {
+      setStatusMensagem("Não foi possível salvar. Confira os campos e se a API está rodando.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  function limparFormulario() {
+    setCliente("");
+    setClienteId(1);
+    setEmpresa("");
+    setCpfCnpj("");
+    setTelefone("");
+    setEndereco("");
+    setCidade("Alagoinhas");
+    setTipo("Pedido");
+    setDataPedido(new Date().toISOString().slice(0, 10));
+    setDataEntrega("");
+    setFormaPagamento("PIX");
+    setCondicaoPagamento("Parcelado");
+    setPercentualEntrada("50");
+    setObservacao("");
+    setFrente("");
+    setFundo("");
+    setTamanhosMasculinos("");
+    setTamanhosFemininos("");
+    setItems([{ id: Date.now(), quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]);
+  }
+
+  function preencherComDetalhe(detalhe: PedidoDetalhe) {
+    setClienteId(detalhe.clienteId);
+    setCliente(detalhe.cliente);
+    setTipo(formatTipoPedido(detalhe.tipo));
+    setDataPedido(detalhe.dataPedido);
+    setDataEntrega(detalhe.dataEntrega ?? "");
+    setFormaPagamento(toUiFormaPagamento(detalhe.formaPagamento));
+    setCondicaoPagamento(toUiCondicaoPagamento(detalhe.condicaoPagamento));
+    setObservacao(detalhe.observacao ?? "");
+    setFrente(detalhe.frente ?? "");
+    setFundo(detalhe.fundo ?? "");
+    setTamanhosMasculinos(detalhe.tamanhosMasculinos ?? "");
+    setTamanhosFemininos(detalhe.tamanhosFemininos ?? "");
+    setPercentualEntrada(detalhe.total > 0 ? String(Math.round((detalhe.valorPago / detalhe.total) * 100)) : "50");
+    setItems([
+      {
+        id: Date.now(),
+        quantidade: "1",
+        tamanho: "",
+        descricao: `Pedido ${detalhe.numero} - ${detalhe.cliente}`,
+        precoUnitario: formatCurrency(detalhe.total)
+      }
+    ]);
   }
 
   return (
@@ -117,11 +223,7 @@ export function PedidoFormPage({ pedido }: { pedido?: PedidoResumo | null }) {
               <Field label="Quant." value={item.quantidade} onChange={(value) => updateItem(item.id, "quantidade", value.replace(/\D/g, ""))} />
               <Field label="Tam." value={item.tamanho} onChange={(value) => updateItem(item.id, "tamanho", value)} />
               <Field label="Descrição" value={item.descricao} onChange={(value) => updateItem(item.id, "descricao", value)} />
-              <Field
-                label="Preço unitário"
-                value={item.precoUnitario}
-                onChange={(value) => updateItem(item.id, "precoUnitario", maskCurrency(value))}
-              />
+              <Field label="Preço unitário" value={item.precoUnitario} onChange={(value) => updateItem(item.id, "precoUnitario", maskCurrency(value))} />
               <Field label="Total" value={formatCurrency(totalItem(item))} onChange={() => undefined} readOnly />
               <Button className="mt-6" size="icon" variant="outline" onClick={() => removeItem(item.id)} aria-label="Remover item">
                 <Trash2 size={16} />
@@ -137,30 +239,18 @@ export function PedidoFormPage({ pedido }: { pedido?: PedidoResumo | null }) {
             <CardTitle>Arte e tamanhos</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <label className="space-y-2">
-              <span className="field-label">Frente</span>
-              <Textarea defaultValue="Logo no peito esquerdo." maxLength={300} />
-            </label>
-            <label className="space-y-2">
-              <span className="field-label">Fundo</span>
-              <Textarea defaultValue="Arte centralizada nas costas." maxLength={300} />
-            </label>
+            <TextField label="Frente" value={frente} onChange={setFrente} />
+            <TextField label="Fundo" value={fundo} onChange={setFundo} />
             <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="field-label">Tamanhos masculinos</span>
-                <Textarea defaultValue="P: 4, M: 8, G: 8" maxLength={300} />
-              </label>
-              <label className="space-y-2">
-                <span className="field-label">Tamanhos femininos</span>
-                <Textarea defaultValue="M: 6, G: 4" maxLength={300} />
-              </label>
+              <TextField label="Tamanhos masculinos" value={tamanhosMasculinos} onChange={setTamanhosMasculinos} />
+              <TextField label="Tamanhos femininos" value={tamanhosFemininos} onChange={setTamanhosFemininos} />
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Pagamento e reserva</CardTitle>
+            <CardTitle>Pagamento</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
@@ -204,19 +294,15 @@ export function PedidoFormPage({ pedido }: { pedido?: PedidoResumo | null }) {
               </div>
             </div>
 
-            {reservaMensagem && (
-              <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-                {reservaMensagem}
+            {statusMensagem && (
+              <p className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">
+                {statusMensagem}
               </p>
             )}
 
-            <Button className="w-full" onClick={reservarMateriais}>
-              <Calculator size={16} />
-              Calcular e reservar materiais
-            </Button>
-            <Button className="w-full" variant="secondary">
+            <Button className="w-full" variant="secondary" onClick={salvar} disabled={isSaving}>
               <Save size={16} />
-              Salvar
+              {isSaving ? "Salvando..." : "Salvar"}
             </Button>
           </CardContent>
         </Card>
@@ -239,14 +325,20 @@ function buildParcelas(condicao: CondicaoPagamento, total: number, dataPedido: s
     ];
   }
 
-  return [
-    {
-      numero: 1,
-      percentual: 100,
-      valor: total,
-      vencimento: condicao === "Pagar na Entrega" ? dataEntrega || dataPedido : dataPedido
-    }
-  ];
+  return [{ numero: 1, percentual: 100, valor: total, vencimento: condicao === "Pagar na Entrega" ? dataEntrega || dataPedido : dataPedido }];
+}
+
+function toUiFormaPagamento(value: string | null) {
+  if (value === "DINHEIRO") return "Dinheiro";
+  if (value === "CARTAO_CREDITO") return "Crédito";
+  if (value === "CARTAO_DEBITO") return "Débito";
+  return "PIX";
+}
+
+function toUiCondicaoPagamento(value: string | null): CondicaoPagamento {
+  if (value === "A_VISTA" || value === "PAGAMENTO_NO_PEDIDO") return "Pago";
+  if (value === "ADIANTAMENTO") return "Parcelado";
+  return "Parcelado";
 }
 
 function Field({
@@ -272,15 +364,16 @@ function Field({
   );
 }
 
-function Select({
-  value,
-  onChange,
-  children
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  children: React.ReactNode;
-}) {
+function TextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="space-y-2">
+      <span className="field-label">{label}</span>
+      <Textarea value={value} onChange={(event) => onChange(event.target.value)} maxLength={300} />
+    </label>
+  );
+}
+
+function Select({ value, onChange, children }: { value: string; onChange: (value: string) => void; children: React.ReactNode }) {
   return (
     <select
       className={cn("mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring")}

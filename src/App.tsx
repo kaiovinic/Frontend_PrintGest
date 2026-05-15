@@ -75,13 +75,13 @@ export default function App() {
     >
       {page === "dashboard" && <DashboardPage setPage={setPage} />}
       {page === "pedidos" && <PedidosPage setPage={setPage} />}
-      {page === "novo-pedido" && <PedidoFormPage pedido={selectedPedido} />}
+      {page === "novo-pedido" && <PedidoFormPage pedido={selectedPedido} usuarioId={user.usuarioId} />}
       {page === "editar-orcamento" && <EditarOrcamentoPage />}
       {page === "estoque" && <EstoquePage />}
       {page === "financeiro" && <FinanceiroPage />}
       {page === "usuarios" && <UsuariosPage />}
       {page === "logs" && <LogsPage />}
-      {page === "conta" && <ContaPage />}
+      {page === "conta" && <ContaPage user={user} />}
     </AppLayout>
   );
 }

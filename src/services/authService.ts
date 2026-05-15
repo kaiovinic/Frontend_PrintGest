@@ -20,3 +20,17 @@ export function login(payload: LoginPayload) {
     body: payload
   });
 }
+
+export type TrocarSenhaPayload = {
+  email: string;
+  senhaAtual: string;
+  novaSenha: string;
+  confirmarNovaSenha: string;
+};
+
+export function trocarSenha(payload: TrocarSenhaPayload) {
+  return apiRequest<void>("/auth/trocar-senha", {
+    method: "PATCH",
+    body: payload
+  });
+}
