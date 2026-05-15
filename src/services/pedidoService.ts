@@ -34,9 +34,8 @@ export type PedidoDetalhe = {
   condicaoPagamento: string | null;
   frente: string | null;
   fundo: string | null;
-  tamanhosMasculinos: string | null;
-  tamanhosFemininos: string | null;
   observacao: string | null;
+  outrosItens: string | null;
   total: number;
   valorPago: number;
   saldoDevedor: number;
@@ -69,9 +68,8 @@ export type PedidoPayload = {
   condicaoPagamento: string | null;
   frente: string | null;
   fundo: string | null;
-  tamanhosMasculinos: string | null;
-  tamanhosFemininos: string | null;
   observacao: string | null;
+  outrosItens: string | null;
   total: number;
   valorPago: number;
   itens: PedidoItemPayload[];

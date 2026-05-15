@@ -44,8 +44,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const [observacao, setObservacao] = useState("");
   const [frente, setFrente] = useState("");
   const [fundo, setFundo] = useState("");
-  const [tamanhosMasculinos, setTamanhosMasculinos] = useState("");
-  const [tamanhosFemininos, setTamanhosFemininos] = useState("");
+  const [outrosItens, setOutrosItens] = useState("");
   const [statusMensagem, setStatusMensagem] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [items, setItems] = useState<ItemPedido[]>([
@@ -104,9 +103,8 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       condicaoPagamento,
       frente: frente || null,
       fundo: fundo || null,
-      tamanhosMasculinos: tamanhosMasculinos || null,
-      tamanhosFemininos: tamanhosFemininos || null,
       observacao: observacao || null,
+      outrosItens: outrosItens || null,
       total: totalGeral,
       valorPago: parcelas[0]?.valor ?? 0,
       itens: items
@@ -161,8 +159,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setObservacao("");
     setFrente("");
     setFundo("");
-    setTamanhosMasculinos("");
-    setTamanhosFemininos("");
+    setOutrosItens("");
     setItems([{ id: Date.now(), quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]);
   }
 
@@ -182,8 +179,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setObservacao(detalhe.observacao ?? "");
     setFrente(detalhe.frente ?? "");
     setFundo(detalhe.fundo ?? "");
-    setTamanhosMasculinos(detalhe.tamanhosMasculinos ?? "");
-    setTamanhosFemininos(detalhe.tamanhosFemininos ?? "");
+    setOutrosItens(detalhe.outrosItens ?? "");
     setPercentualEntrada(detalhe.total > 0 ? String(Math.round((detalhe.valorPago / detalhe.total) * 100)) : "50");
     setItems(
       detalhe.itens?.length
@@ -258,14 +254,14 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Arte e tamanhos</CardTitle>
+            <CardTitle>Arte e observações</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
             <TextField label="Frente" value={frente} onChange={setFrente} />
             <TextField label="Fundo" value={fundo} onChange={setFundo} />
             <div className="grid gap-4 md:grid-cols-2">
-              <TextField label="Tamanhos masculinos" value={tamanhosMasculinos} onChange={setTamanhosMasculinos} />
-              <TextField label="Tamanhos femininos" value={tamanhosFemininos} onChange={setTamanhosFemininos} />
+              <TextField label="Observação" value={observacao} onChange={setObservacao} />
+              <TextField label="Outros itens" value={outrosItens} onChange={setOutrosItens} />
             </div>
           </CardContent>
         </Card>
@@ -294,7 +290,6 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
                 </Select>
               </label>
               <Field label="Total geral" value={formatCurrency(totalGeral)} onChange={() => undefined} readOnly />
-              <Field label="Observação" value={observacao} onChange={setObservacao} />
             </div>
 
             <div className="rounded-lg border p-4">
