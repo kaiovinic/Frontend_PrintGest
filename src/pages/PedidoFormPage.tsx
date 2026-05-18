@@ -1,4 +1,4 @@
-import { Plus, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Ban, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,14 +8,17 @@ import { cn } from "@/lib/utils";
 import {
   atualizarOrcamento,
   atualizarPedido,
+  cancelarPedido,
   criarOrcamento,
   criarPedido,
+  finalizarPedido,
   obterPedido,
   type PedidoDetalhe,
   type PedidoPayload,
   type PedidoResumo
 } from "@/services/pedidoService";
-import { formatCurrency, formatTipoPedido, maskCpfCnpj, maskCurrency, maskPhone, parseCurrency } from "@/utils/formatters";
+import { ApiError } from "@/services/api";
+import { formatCurrency, formatStatusPedido, formatTipoPedido, maskCpfCnpj, maskCurrency, maskPhone, parseCurrency } from "@/utils/formatters";
 
 type ItemPedido = {
   id: number;
@@ -36,6 +39,8 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const [endereco, setEndereco] = useState("");
   const [cidade, setCidade] = useState("Alagoinhas");
   const [tipo, setTipo] = useState(pedido ? formatTipoPedido(pedido.tipo) : "Pedido");
+  const [tipoOriginal, setTipoOriginal] = useState(pedido ? formatTipoPedido(pedido.tipo) : "Pedido");
+  const [statusAtual, setStatusAtual] = useState(pedido ? formatStatusPedido(pedido.status) : "");
   const [dataPedido, setDataPedido] = useState(pedido?.dataPedido ?? new Date().toISOString().slice(0, 10));
   const [dataEntrega, setDataEntrega] = useState(pedido?.dataEntrega ?? "");
   const [formaPagamento, setFormaPagamento] = useState("PIX");
@@ -47,6 +52,13 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const [outrosItens, setOutrosItens] = useState("");
   const [statusMensagem, setStatusMensagem] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [finalizarModalOpen, setFinalizarModalOpen] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [saldoDevedor, setSaldoDevedor] = useState(pedido?.saldoDevedor ?? 0);
+  const [formaPagamentoFinalizacao, setFormaPagamentoFinalizacao] = useState("PIX");
   const [items, setItems] = useState<ItemPedido[]>([
     {
       id: 1,
@@ -59,6 +71,10 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
 
   const totalGeral = useMemo(() => items.reduce((sum, item) => sum + totalItem(item), 0), [items]);
   const parcelas = buildParcelas(condicaoPagamento, totalGeral, dataPedido, dataEntrega, Number(percentualEntrada || 0));
+  const tipoBloqueado = Boolean(pedido) && tipoOriginal === "Pedido";
+  const cancelReasonValido = cancelReason.trim().length >= 10;
+  const podeFinalizar = Boolean(pedido) && tipoOriginal === "Pedido" && statusAtual === "Aberto";
+  const registroEncerrado = statusAtual === "Cancelado" || statusAtual === "Finalizado";
 
   useEffect(() => {
     if (!pedido?.id) {
@@ -120,6 +136,11 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
 
     try {
       if (pedido) {
+        if (tipoOriginal === "Pedido" && tipo === "OrÃ§amento") {
+          setStatusMensagem("NÃ£o Ã© permitido transformar um pedido em orÃ§amento. Se o cliente desistiu, use a opÃ§Ã£o Cancelar.");
+          return;
+        }
+
         if (tipo === "Pedido") {
           await atualizarPedido(pedido.id, payload);
         } else {
@@ -135,10 +156,65 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
         setStatusMensagem("Orçamento criado com sucesso.");
         limparFormulario();
       }
-    } catch {
-      setStatusMensagem("Não foi possível salvar. Confira os campos e se a API está rodando.");
+    } catch (error) {
+      setStatusMensagem(error instanceof ApiError ? error.message : "Não foi possível salvar. Confira os campos e se a API está rodando.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function confirmarCancelamento() {
+    if (!pedido) {
+      return;
+    }
+
+    setStatusMensagem(null);
+    if (!cancelReasonValido) {
+      setStatusMensagem("Informe o motivo do cancelamento com pelo menos 10 caracteres.");
+      return;
+    }
+
+    setIsCanceling(true);
+
+    try {
+      await cancelarPedido(pedido.id, usuarioId, cancelReason);
+      setStatusAtual("Cancelado");
+      setCancelModalOpen(false);
+      setCancelReason("");
+      setStatusMensagem(`${tipoOriginal} cancelado com sucesso.`);
+    } catch (error) {
+      setStatusMensagem(error instanceof ApiError ? error.message : "Não foi possível cancelar este registro.");
+    } finally {
+      setIsCanceling(false);
+    }
+  }
+
+  async function confirmarFinalizacao() {
+    if (!pedido) {
+      return;
+    }
+
+    setStatusMensagem(null);
+    setIsFinalizing(true);
+
+    try {
+      await finalizarPedido(pedido.id, {
+        usuarioId,
+        observacao:
+          saldoDevedor > 0
+            ? `Pagamento do saldo devedor de ${formatCurrency(saldoDevedor)} registrado na finalização.`
+            : "Produto entregue e pagamento confirmado.",
+        receberSaldo: saldoDevedor > 0,
+        formaPagamento: saldoDevedor > 0 ? formaPagamentoFinalizacao : null
+      });
+      setStatusAtual("Finalizado");
+      setSaldoDevedor(0);
+      setFinalizarModalOpen(false);
+      setStatusMensagem("Pedido finalizado com sucesso.");
+    } catch (error) {
+      setStatusMensagem(error instanceof ApiError ? error.message : "Não foi possível finalizar este pedido.");
+    } finally {
+      setIsFinalizing(false);
     }
   }
 
@@ -151,9 +227,13 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setEndereco("");
     setCidade("Alagoinhas");
     setTipo("Pedido");
+    setTipoOriginal("Pedido");
+    setStatusAtual("");
+    setSaldoDevedor(0);
     setDataPedido(new Date().toISOString().slice(0, 10));
     setDataEntrega("");
     setFormaPagamento("PIX");
+    setFormaPagamentoFinalizacao("PIX");
     setCondicaoPagamento("Parcelado");
     setPercentualEntrada("50");
     setObservacao("");
@@ -172,9 +252,13 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setEndereco(detalhe.endereco ?? "");
     setCidade(detalhe.cidade ?? "Alagoinhas");
     setTipo(formatTipoPedido(detalhe.tipo));
+    setTipoOriginal(formatTipoPedido(detalhe.tipo));
+    setStatusAtual(formatStatusPedido(detalhe.status));
+    setSaldoDevedor(detalhe.saldoDevedor);
     setDataPedido(detalhe.dataPedido);
     setDataEntrega(detalhe.dataEntrega ?? "");
     setFormaPagamento(toUiFormaPagamento(detalhe.formaPagamento));
+    setFormaPagamentoFinalizacao(toUiFormaPagamento(detalhe.formaPagamento));
     setCondicaoPagamento(toUiCondicaoPagamento(detalhe.condicaoPagamento));
     setObservacao(detalhe.observacao ?? "");
     setFrente(detalhe.frente ?? "");
@@ -196,9 +280,25 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-black">{pedido ? `Editar pedido ${pedido.numero}` : "Pedido"}</h1>
-        <p className="text-sm text-muted-foreground">Campos baseados no talão físico da Print Impressões</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black">{pedido ? `Editar pedido ${pedido.numero}` : "Pedido"}</h1>
+          <p className="text-sm text-muted-foreground">Campos baseados no talão físico da Print Impressões</p>
+        </div>
+        {pedido && statusAtual !== "Cancelado" && statusAtual !== "Finalizado" && (
+          <div className="flex flex-wrap gap-3">
+            {podeFinalizar && (
+              <Button onClick={() => setFinalizarModalOpen(true)}>
+                <CheckCircle2 size={16} />
+                Finalizar pedido
+              </Button>
+            )}
+            <Button variant="destructive" onClick={() => setCancelModalOpen(true)}>
+              <Ban size={16} />
+              Cancelar {tipoOriginal.toLowerCase()}
+            </Button>
+          </div>
+        )}
       </div>
 
       <Card>
@@ -214,15 +314,15 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
           <Field label="Cidade" value={cidade} onChange={setCidade} />
           <label>
             <span className="field-label">Tipo</span>
-            <Select value={tipo} onChange={setTipo}>
+            <Select value={tipo} onChange={setTipo} disabled={tipoBloqueado}>
               <option value="Pedido">Pedido</option>
-              <option value="Orçamento">Orçamento</option>
+              {!tipoBloqueado && <option value="Orçamento">Orçamento</option>}
             </Select>
           </label>
           <Field label="Data do pedido" value={dataPedido} onChange={setDataPedido} type="date" />
           <Field label="Data de entrega" value={dataEntrega} onChange={setDataEntrega} type="date" />
           <p className="md:col-span-4 rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">
-            Se salvar como Orçamento, ele aparece na tabela com status Orçado. Ao editar e trocar para Pedido, o orçamento vira pedido.
+            Se salvar como Orçamento, ele aparece na tabela com status Orçado. Ao editar e trocar para Pedido, o orçamento vira pedido. Pedido já aberto não volta para orçamento.
           </p>
         </CardContent>
       </Card>
@@ -277,8 +377,8 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
                 <Select value={formaPagamento} onChange={setFormaPagamento}>
                   <option value="PIX">PIX</option>
                   <option value="Dinheiro">Dinheiro</option>
-                  <option value="Crédito">Cartão de crédito</option>
-                  <option value="Débito">Cartão de débito</option>
+                  <option value="CARTAO_CREDITO">Cartão de crédito</option>
+                  <option value="CARTAO_DEBITO">Cartão de débito</option>
                 </Select>
               </label>
               <label>
@@ -317,13 +417,100 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
               </p>
             )}
 
-            <Button className="w-full" variant="secondary" onClick={salvar} disabled={isSaving}>
+            {registroEncerrado && (
+              <p className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+                Este registro está {statusAtual.toLowerCase()} e não pode mais ser editado.
+              </p>
+            )}
+
+            <Button className="w-full" variant="secondary" onClick={salvar} disabled={isSaving || registroEncerrado}>
               <Save size={16} />
-              {isSaving ? "Salvando..." : "Salvar"}
+              {registroEncerrado ? "Edição bloqueada" : isSaving ? "Salvando..." : "Salvar"}
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      {cancelModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-lg rounded-lg border bg-background p-6 shadow-xl">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-red-100 p-2 text-red-700 dark:bg-red-950 dark:text-red-300">
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black">Cancelar {tipoOriginal.toLowerCase()}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Esta ação muda o status para cancelado e registra o motivo informado. Confirme apenas se o cliente realmente desistiu.
+                </p>
+              </div>
+            </div>
+
+            <label className="mt-5 block space-y-2">
+              <span className="field-label">Motivo do cancelamento</span>
+              <Textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} maxLength={300} placeholder="Ex.: Cliente desistiu do pedido." />
+              <span className="text-xs font-semibold text-muted-foreground">
+                Mínimo de 10 caracteres. {cancelReason.trim().length}/300
+              </span>
+            </label>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <Button variant="outline" onClick={() => setCancelModalOpen(false)} disabled={isCanceling}>
+                Voltar
+              </Button>
+              <Button variant="destructive" onClick={confirmarCancelamento} disabled={isCanceling || !cancelReasonValido}>
+                <Ban size={16} />
+                {isCanceling ? "Cancelando..." : "Confirmar cancelamento"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {finalizarModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-lg rounded-lg border bg-background p-6 shadow-xl">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-emerald-100 p-2 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                <CheckCircle2 size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black">Finalizar pedido</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Confirme apenas se o produto foi entregue e o pagamento foi concluído. Após finalizar, o pedido deixa de aparecer no dashboard.
+                </p>
+              </div>
+            </div>
+
+            {saldoDevedor > 0 && (
+              <div className="mt-5 space-y-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                <p className="font-semibold">
+                  Este pedido ainda possui saldo devedor de {formatCurrency(saldoDevedor)}. Para finalizar, registre o recebimento do valor faltante.
+                </p>
+                <label className="block">
+                  <span className="field-label">Forma de pagamento do saldo</span>
+                  <Select value={formaPagamentoFinalizacao} onChange={setFormaPagamentoFinalizacao}>
+                    <option value="PIX">PIX</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="CARTAO_CREDITO">Cartão de crédito</option>
+                    <option value="CARTAO_DEBITO">Cartão de débito</option>
+                  </Select>
+                </label>
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <Button variant="outline" onClick={() => setFinalizarModalOpen(false)} disabled={isFinalizing}>
+                Voltar
+              </Button>
+              <Button onClick={confirmarFinalizacao} disabled={isFinalizing}>
+                <CheckCircle2 size={16} />
+                {isFinalizing ? "Finalizando..." : saldoDevedor > 0 ? "Receber saldo e finalizar" : "Confirmar finalização"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -347,8 +534,8 @@ function buildParcelas(condicao: CondicaoPagamento, total: number, dataPedido: s
 
 function toUiFormaPagamento(value: string | null) {
   if (value === "DINHEIRO") return "Dinheiro";
-  if (value === "CARTAO_CREDITO") return "Crédito";
-  if (value === "CARTAO_DEBITO") return "Débito";
+  if (value === "CARTAO_CREDITO") return "CARTAO_CREDITO";
+  if (value === "CARTAO_DEBITO") return "CARTAO_DEBITO";
   return "PIX";
 }
 
@@ -390,12 +577,26 @@ function TextField({ label, value, onChange }: { label: string; value: string; o
   );
 }
 
-function Select({ value, onChange, children }: { value: string; onChange: (value: string) => void; children: React.ReactNode }) {
+function Select({
+  value,
+  onChange,
+  children,
+  disabled = false
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
   return (
     <select
-      className={cn("mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring")}
+      className={cn(
+        "mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        disabled && "cursor-not-allowed opacity-60"
+      )}
       value={value}
       onChange={(event) => onChange(event.target.value)}
+      disabled={disabled}
     >
       {children}
     </select>

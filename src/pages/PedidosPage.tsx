@@ -63,6 +63,23 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
     });
   }, [ano, dataFinal, dataInicio, mes, pedidos, status]);
 
+  const totaisStatus = useMemo(
+    () =>
+      pedidosFiltrados.reduce(
+        (acc, pedido) => {
+          const pedidoStatus = formatStatusPedido(pedido.status);
+          const tipo = formatTipoPedido(pedido.tipo);
+          if (tipo === "Orçamento") acc.orcamentos += 1;
+          if (pedidoStatus === "Aberto") acc.abertos += 1;
+          if (pedidoStatus === "Cancelado") acc.cancelados += 1;
+          if (pedidoStatus === "Finalizado") acc.finalizados += 1;
+          return acc;
+        },
+        { abertos: 0, orcamentos: 0, cancelados: 0, finalizados: 0 }
+      ),
+    [pedidosFiltrados]
+  );
+
   function limparPeriodo() {
     setDataInicio("");
     setDataFinal("");
@@ -75,17 +92,18 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
           <h1 className="text-3xl font-black">Pedidos e orçamentos</h1>
           <p className="text-sm text-muted-foreground">Abertos, cancelados, finalizados e orçados</p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <Button variant="outline" onClick={() => setPage("novo-pedido")}>
-            <Plus size={16} />
-            Novo orçamento
-          </Button>
-          <Button onClick={() => setPage("novo-pedido")}>
-            <Plus size={16} />
-            Novo pedido
-          </Button>
-        </div>
+        <Button onClick={() => setPage("novo-pedido")}>
+          <Plus size={16} />
+          Novo Pedido/Orçamento
+        </Button>
       </div>
+
+      <section className="grid gap-4 md:grid-cols-4">
+        <Metric title="Abertos" value={String(totaisStatus.abertos)} tone="cyan" />
+        <Metric title="Orçamentos" value={String(totaisStatus.orcamentos)} tone="amber" />
+        <Metric title="Cancelados" value={String(totaisStatus.cancelados)} tone="rose" />
+        <Metric title="Finalizados" value={String(totaisStatus.finalizados)} tone="emerald" />
+      </section>
 
       <Card>
         <CardContent className="grid gap-3 p-5 md:grid-cols-6">
@@ -143,19 +161,20 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                 <TableHead>Total</TableHead>
                 <TableHead>Pago</TableHead>
                 <TableHead>Saldo</TableHead>
+                <TableHead>Motivo cancelamento</TableHead>
                 <TableHead>Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={8}>Carregando pedidos...</TableCell>
+                  <TableCell colSpan={9}>Carregando pedidos...</TableCell>
                 </TableRow>
               )}
 
               {error && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-destructive">
+                  <TableCell colSpan={9} className="text-destructive">
                     {error}
                   </TableCell>
                 </TableRow>
@@ -178,6 +197,9 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                       <TableCell>{formatCurrency(pedido.total)}</TableCell>
                       <TableCell>{formatCurrency(pedido.valorPago)}</TableCell>
                       <TableCell>{formatCurrency(pedido.saldoDevedor)}</TableCell>
+                      <TableCell className="max-w-64 whitespace-normal text-sm text-muted-foreground">
+                        {pedidoStatus === "Cancelado" ? pedido.motivoCancelamento || "-" : "-"}
+                      </TableCell>
                       <TableCell>
                         <Button size="sm" variant="outline" onClick={() => setPage("novo-pedido", pedido)}>
                           Editar
@@ -225,4 +247,22 @@ function badgeTone(status: string) {
   if (status === "Cancelado") return "danger";
   if (status === "Aberto") return "info";
   return "warning";
+}
+
+function Metric({ title, value, tone }: { title: string; value: string; tone: "amber" | "cyan" | "rose" | "emerald" }) {
+  const colors = {
+    amber: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+    cyan: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300",
+    rose: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+    emerald: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+  };
+
+  return (
+    <Card className={colors[tone]}>
+      <CardContent className="p-5">
+        <p className="text-sm font-semibold opacity-80">{title}</p>
+        <p className="mt-2 text-3xl font-black">{value}</p>
+      </CardContent>
+    </Card>
+  );
 }

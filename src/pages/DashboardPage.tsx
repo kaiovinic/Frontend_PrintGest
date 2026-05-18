@@ -28,11 +28,9 @@ export function DashboardPage({ setPage }: { setPage: Navigate }) {
       const tipo = formatTipoPedido(pedido.tipo);
       if (tipo === "Orçamento") acc.orcamentos += 1;
       if (status === "Aberto") acc.abertos += 1;
-      if (status === "Finalizado") acc.finalizados += 1;
-      if (formatDate(pedido.dataEntrega) === "14/05/2026") acc.entregaHoje += 1;
       return acc;
     },
-    { orcamentos: 0, abertos: 0, entregaHoje: 0, finalizados: 0 }
+    { orcamentos: 0, abertos: 0 }
   );
 
   return (
@@ -44,15 +42,13 @@ export function DashboardPage({ setPage }: { setPage: Navigate }) {
         </div>
         <Button onClick={() => setPage("novo-pedido")}>
           <Plus size={16} />
-          Novo Pedido
+          Novo Pedido/Orçamento
         </Button>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-4">
-        <Metric title="Orcamentos" value={String(totais.orcamentos)} tone="amber" />
+      <section className="grid gap-4 md:grid-cols-2">
+        <Metric title="Orçamentos" value={String(totais.orcamentos)} tone="amber" />
         <Metric title="Abertos" value={String(totais.abertos)} tone="cyan" />
-        <Metric title="Entrega hoje" value={String(totais.entregaHoje)} tone="rose" />
-        <Metric title="Finalizados" value={String(totais.finalizados)} tone="emerald" />
       </section>
 
       <Card>
@@ -88,7 +84,13 @@ export function DashboardPage({ setPage }: { setPage: Navigate }) {
 
               {!isLoading &&
                 !error &&
-                pedidos.slice(0, 5).map((pedido) => {
+                pedidos
+                  .filter((pedido) => {
+                    const status = formatStatusPedido(pedido.status);
+                    return status !== "Cancelado" && status !== "Finalizado";
+                  })
+                  .slice(0, 5)
+                  .map((pedido) => {
                   const status = formatStatusPedido(pedido.status);
 
                   return (
@@ -113,9 +115,14 @@ export function DashboardPage({ setPage }: { setPage: Navigate }) {
             </TableBody>
           </Table>
 
-          {!isLoading && !error && pedidos.length > 0 && (
+          {!isLoading && !error && pedidos.some((pedido) => !["Cancelado", "Finalizado"].includes(formatStatusPedido(pedido.status))) && (
             <p className="mt-3 text-xs font-semibold text-muted-foreground">
-              Total recente: {formatCurrency(pedidos.reduce((sum, pedido) => sum + pedido.total, 0))}
+              Total em aberto:{" "}
+              {formatCurrency(
+                pedidos
+                  .filter((pedido) => !["Cancelado", "Finalizado"].includes(formatStatusPedido(pedido.status)))
+                  .reduce((sum, pedido) => sum + pedido.total, 0)
+              )}
             </p>
           )}
         </CardContent>
@@ -124,12 +131,10 @@ export function DashboardPage({ setPage }: { setPage: Navigate }) {
   );
 }
 
-function Metric({ title, value, tone }: { title: string; value: string; tone: "amber" | "cyan" | "rose" | "emerald" }) {
+function Metric({ title, value, tone }: { title: string; value: string; tone: "amber" | "cyan" }) {
   const colors = {
     amber: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
-    cyan: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300",
-    rose: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
-    emerald: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+    cyan: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300"
   };
 
   return (

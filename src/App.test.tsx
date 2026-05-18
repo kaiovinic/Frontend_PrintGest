@@ -43,6 +43,10 @@ const pedidosResponse = [
 
 describe("PrintGest frontend", () => {
   beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.hash = "";
+
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
@@ -63,6 +67,9 @@ describe("PrintGest frontend", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.hash = "";
     document.documentElement.classList.remove("dark");
   });
 

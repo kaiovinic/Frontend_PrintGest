@@ -12,6 +12,7 @@ export type PedidoResumo = {
   valorPago: number;
   saldoDevedor: number;
   criadoPor: string;
+  motivoCancelamento: string | null;
 };
 
 export type PedidoDetalhe = {
@@ -35,6 +36,7 @@ export type PedidoDetalhe = {
   frente: string | null;
   fundo: string | null;
   observacao: string | null;
+  motivoCancelamento: string | null;
   outrosItens: string | null;
   total: number;
   valorPago: number;
@@ -119,6 +121,30 @@ export function atualizarPedido(id: number, payload: PedidoPayload) {
 export function atualizarOrcamento(id: number, payload: PedidoPayload) {
   return apiRequest<void>(`/pedidos/${id}/orcamento`, {
     method: "PUT",
+    body: payload
+  });
+}
+
+export function cancelarPedido(id: number, usuarioId: number, observacao?: string | null) {
+  return apiRequest<void>(`/pedidos/${id}/cancelar`, {
+    method: "PATCH",
+    body: {
+      usuarioId,
+      observacao: observacao || null
+    }
+  });
+}
+
+export type FinalizarPedidoPayload = {
+  usuarioId: number;
+  observacao?: string | null;
+  receberSaldo: boolean;
+  formaPagamento?: string | null;
+};
+
+export function finalizarPedido(id: number, payload: FinalizarPedidoPayload) {
+  return apiRequest<void>(`/pedidos/${id}/finalizar`, {
+    method: "PATCH",
     body: payload
   });
 }
