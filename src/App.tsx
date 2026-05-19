@@ -112,7 +112,7 @@ export default function App() {
       {page === "pedidos" && <PedidosPage setPage={setPage} />}
       {page === "novo-pedido" && <PedidoFormPage pedido={selectedPedido} usuarioId={user.usuarioId} />}
       {page === "editar-orcamento" && <EditarOrcamentoPage />}
-      {page === "estoque" && <EstoquePage />}
+      {page === "estoque" && <EstoquePage usuarioId={user.usuarioId} />}
       {page === "financeiro" && <FinanceiroPage />}
       {page === "usuarios" && <UsuariosPage />}
       {page === "logs" && <LogsPage />}
