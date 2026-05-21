@@ -52,16 +52,16 @@ export function formatDate(value: string | null) {
 
 export function formatTipoPedido(value: string | number) {
   if (typeof value === "number") {
-    return value === 0 ? "Orçamento" : "Pedido";
+    return value === 0 ? "Or\u00e7amento" : "Pedido";
   }
 
-  return normalize(value) === "orcamento" ? "Orçamento" : "Pedido";
+  return normalize(value) === "orcamento" ? "Or\u00e7amento" : "Pedido";
 }
 
 export function formatStatusPedido(value: string | number) {
   if (typeof value === "number") {
     const statusByNumber: Record<number, string> = {
-      0: "Orçado",
+      0: "Or\u00e7ado",
       1: "Aberto",
       2: "Finalizado",
       3: "Cancelado"
@@ -71,7 +71,7 @@ export function formatStatusPedido(value: string | number) {
   }
 
   const normalized = normalize(value);
-  if (normalized === "orcado") return "Orçado";
+  if (normalized === "orcado") return "Or\u00e7ado";
   if (normalized === "aberto") return "Aberto";
   if (normalized === "finalizado") return "Finalizado";
   if (normalized === "cancelado") return "Cancelado";

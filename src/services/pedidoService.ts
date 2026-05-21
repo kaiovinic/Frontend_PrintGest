@@ -1,4 +1,4 @@
-﻿import { apiRequest } from "@/services/api";
+import { apiRequest } from "@/services/api";
 
 export type PedidoResumo = {
   id: number;
@@ -104,8 +104,27 @@ export function listarPedidosRecentes() {
   return apiRequest<PedidoResumo[]>("/pedidos/recentes");
 }
 
-export function listarPedidos() {
-  return apiRequest<PedidoResumo[]>("/pedidos");
+export type PedidoFiltro = {
+  ano?: string;
+  mes?: string;
+  inicio?: string;
+  fim?: string;
+  status?: string;
+};
+
+export function listarPedidos(filtros: PedidoFiltro = {}) {
+  const params = new URLSearchParams();
+  if (filtros.inicio || filtros.fim) {
+    if (filtros.inicio) params.set("inicio", filtros.inicio);
+    if (filtros.fim) params.set("fim", filtros.fim);
+  } else {
+    if (filtros.ano) params.set("ano", filtros.ano);
+    if (filtros.mes) params.set("mes", String(Number(filtros.mes)));
+  }
+  if (filtros.status) params.set("status", filtros.status);
+
+  const query = params.toString();
+  return apiRequest<PedidoResumo[]>(`/pedidos${query ? `?${query}` : ""}`);
 }
 
 export function obterPedido(id: number) {

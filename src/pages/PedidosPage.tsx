@@ -16,7 +16,7 @@ const currentDate = new Date();
 const meses = [
   ["01", "Janeiro"],
   ["02", "Fevereiro"],
-  ["03", "Março"],
+  ["03", "Mar\u00e7o"],
   ["04", "Abril"],
   ["05", "Maio"],
   ["06", "Junho"],
@@ -38,30 +38,21 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
   const [dataFinal, setDataFinal] = useState("");
   const [status, setStatus] = useState("");
 
-  useEffect(() => {
-    listarPedidos()
+  function carregarPedidos() {
+    setIsLoading(true);
+    setError(null);
+    listarPedidos({ ano, mes, inicio: dataInicio, fim: dataFinal, status })
       .then(setPedidos)
       .catch(() => setError("Nao foi possivel carregar os pedidos."))
       .finally(() => setIsLoading(false));
+  }
+
+  useEffect(() => {
+    carregarPedidos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const pedidosFiltrados = useMemo(() => {
-    return pedidos.filter((pedido) => {
-      const pedidoStatus = formatStatusPedido(pedido.status);
-      const dataPedido = pedido.dataPedido;
-      const usaPeriodo = dataInicio || dataFinal;
-
-      if (status && pedidoStatus !== status) return false;
-
-      if (usaPeriodo) {
-        if (dataInicio && dataPedido < dataInicio) return false;
-        if (dataFinal && dataPedido > dataFinal) return false;
-        return true;
-      }
-
-      return dataPedido.startsWith(`${ano}-${mes}`);
-    });
-  }, [ano, dataFinal, dataInicio, mes, pedidos, status]);
+  const pedidosFiltrados = pedidos;
 
   const totaisStatus = useMemo(
     () =>
@@ -69,7 +60,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
         (acc, pedido) => {
           const pedidoStatus = formatStatusPedido(pedido.status);
           const tipo = formatTipoPedido(pedido.tipo);
-          if (tipo === "Orçamento") acc.orcamentos += 1;
+          if (tipo === "Or\u00e7amento") acc.orcamentos += 1;
           if (pedidoStatus === "Aberto") acc.abertos += 1;
           if (pedidoStatus === "Cancelado") acc.cancelados += 1;
           if (pedidoStatus === "Finalizado") acc.finalizados += 1;
@@ -89,18 +80,18 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black">Pedidos e orçamentos</h1>
-          <p className="text-sm text-muted-foreground">Abertos, cancelados, finalizados e orçados</p>
+          <h1 className="text-3xl font-black">Pedidos e or&ccedil;amentos</h1>
+          <p className="text-sm text-muted-foreground">Abertos, cancelados, finalizados e or&ccedil;ados</p>
         </div>
         <Button onClick={() => setPage("novo-pedido")}>
           <Plus size={16} />
-          Novo Pedido/Orçamento
+          Novo Pedido/Or&ccedil;amento
         </Button>
       </div>
 
       <section className="grid gap-4 md:grid-cols-4">
         <Metric title="Abertos" value={String(totaisStatus.abertos)} tone="cyan" />
-        <Metric title="Orçamentos" value={String(totaisStatus.orcamentos)} tone="amber" />
+        <Metric title="Or\u00e7amentos" value={String(totaisStatus.orcamentos)} tone="amber" />
         <Metric title="Cancelados" value={String(totaisStatus.cancelados)} tone="rose" />
         <Metric title="Finalizados" value={String(totaisStatus.finalizados)} tone="emerald" />
       </section>
@@ -112,7 +103,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
             <Input className="mt-2" value={ano} onChange={(event) => setAno(event.target.value)} disabled={Boolean(dataInicio || dataFinal)} />
           </label>
           <label>
-            <span className="field-label">Mês</span>
+            <span className="field-label">M&ecirc;s</span>
             <Select value={mes} onChange={setMes} disabled={Boolean(dataInicio || dataFinal)}>
               {meses.map(([value, label]) => (
                 <option key={value} value={value}>
@@ -122,7 +113,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
             </Select>
           </label>
           <label>
-            <span className="field-label">Data início</span>
+            <span className="field-label">Data inÃƒÆ’Ã‚Â­cio</span>
             <Input className="mt-2" type="date" value={dataInicio} onChange={(event) => setDataInicio(event.target.value)} onFocus={limparPeriodo} />
           </label>
           <label>
@@ -133,13 +124,13 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
             <span className="field-label">Status</span>
             <Select value={status} onChange={setStatus}>
               <option value="">Todos</option>
-              <option value="Orçado">Orçado</option>
+              <option value="OrÃƒÆ’Ã‚Â§ado">OrÃƒÆ’Ã‚Â§ado</option>
               <option value="Aberto">Aberto</option>
               <option value="Finalizado">Finalizado</option>
               <option value="Cancelado">Cancelado</option>
             </Select>
           </label>
-          <Button className="mt-6" variant="outline">
+          <Button className="mt-6" variant="outline" onClick={carregarPedidos}>
             <Filter size={16} />
             Filtrar
           </Button>
@@ -161,9 +152,9 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                 <TableHead>Total</TableHead>
                 <TableHead>Pago</TableHead>
                 <TableHead>Saldo</TableHead>
-                <TableHead>Devolução</TableHead>
+                <TableHead>Devolu&ccedil;&atilde;o</TableHead>
                 <TableHead>Motivo cancelamento</TableHead>
-                <TableHead>Ação</TableHead>
+                <TableHead>A&ccedil;&atilde;o</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
