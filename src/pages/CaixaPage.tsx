@@ -51,13 +51,13 @@ const emptyForm: CaixaForm = {
 };
 
 const categoriasPadrao = [
-  "Servi\u00e7o avulso",
+  "Serviço avulso",
   "Troco inicial",
   "Ajuste de caixa",
   "Material de limpeza",
   "Compra emergencial",
   "Transporte",
-  "Alimenta\u00e7\u00e3o",
+  "Alimentação",
   "Sangria de caixa"
 ];
 
@@ -130,7 +130,7 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
         observacao: form.observacao.trim() || null
       });
       setForm(emptyForm);
-      setMensagem("Movimenta\u00e7\u00e3o de caixa registrada com sucesso.");
+      setMensagem("Movimentação de caixa registrada com sucesso.");
       await carregarCaixa();
       await carregarPedidos();
     } catch {
@@ -165,13 +165,13 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-black">Controle de caixa</h1>
-        <p className="text-sm text-muted-foreground">Entradas de pedidos, recebimentos avulsos e sa\u00eddas operacionais</p>
+        <p className="text-sm text-muted-foreground">Entradas de pedidos, recebimentos avulsos e saídas operacionais</p>
       </div>
 
       <Card>
         <CardContent className="grid gap-4 p-5 md:grid-cols-[1fr_1fr_auto]">
           <label>
-            <span className="field-label">Data in\u00edcio</span>
+            <span className="field-label">Data início</span>
             <Input className="mt-2" type="date" value={inicio} onChange={(event) => setInicio(event.target.value)} />
           </label>
           <label>
@@ -186,15 +186,15 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric title="Entradas" value={formatCurrency(resumo.entradas)} tone="green" />
-        <Metric title="Sa\u00eddas" value={formatCurrency(resumo.saidas)} tone="rose" />
+        <Metric title="Saídas" value={formatCurrency(resumo.saidas)} tone="rose" />
         <Metric title="Saldo caixa" value={formatCurrency(resumo.saldo)} tone="cyan" />
         <Metric title="Dinheiro" value={formatCurrency(resumo.dinheiro)} tone="amber" />
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Metric title="PIX" value={formatCurrency(resumo.pix)} tone="green" />
-        <Metric title="Cart\u00e3o cr\u00e9dito" value={formatCurrency(resumo.cartaoCredito)} tone="cyan" />
-        <Metric title="Cart\u00e3o d\u00e9bito" value={formatCurrency(resumo.cartaoDebito)} tone="cyan" />
+        <Metric title="Cartão crédito" value={formatCurrency(resumo.cartaoCredito)} tone="cyan" />
+        <Metric title="Cartão débito" value={formatCurrency(resumo.cartaoDebito)} tone="cyan" />
       </section>
 
       {mensagem && (
@@ -206,14 +206,14 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Nova movimenta\u00e7\u00e3o manual</CardTitle>
+            <CardTitle>Nova movimentação manual</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <label>
               <span className="field-label">Tipo</span>
               <Select value={form.tipo} onChange={(value) => setForm((current) => ({ ...current, tipo: value as "ENTRADA" | "SAIDA", pedidoId: value === "SAIDA" ? "" : current.pedidoId }))}>
                 <option value="ENTRADA">Entrada</option>
-                <option value="SAIDA">Sa\u00edda</option>
+                <option value="SAIDA">Saída</option>
               </Select>
             </label>
             {form.tipo === "ENTRADA" && (
@@ -239,8 +239,8 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
               <Select value={form.formaPagamento} onChange={(value) => setForm((current) => ({ ...current, formaPagamento: value }))}>
                 <option value="DINHEIRO">Dinheiro</option>
                 <option value="PIX">PIX</option>
-                <option value="CARTAO_CREDITO">Cart\u00e3o cr\u00e9dito</option>
-                <option value="CARTAO_DEBITO">Cart\u00e3o d\u00e9bito</option>
+                <option value="CARTAO_CREDITO">Cartão crédito</option>
+                <option value="CARTAO_DEBITO">Cartão débito</option>
               </Select>
             </label>
             <label>
@@ -259,21 +259,21 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
                 </Button>
               </div>
             </label>
-            <Field label="Descri\u00e7\u00e3o" value={form.descricao} onChange={(value) => setForm((current) => ({ ...current, descricao: value }))} />
+            <Field label="Descrição" value={form.descricao} onChange={(value) => setForm((current) => ({ ...current, descricao: value }))} />
             <Field label="Valor" value={form.valor} onChange={(value) => setForm((current) => ({ ...current, valor: maskCurrency(value) }))} />
             <label className="space-y-2">
-              <span className="field-label">Observa\u00e7\u00e3o</span>
+              <span className="field-label">Observação</span>
               <Textarea value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} maxLength={300} />
             </label>
             <Button onClick={salvarMovimentacao} disabled={isSaving || !podeSalvar}>
-              {isSaving ? "Registrando..." : "Registrar movimenta\u00e7\u00e3o"}
+              {isSaving ? "Registrando..." : "Registrar movimentação"}
             </Button>
           </CardContent>
         </Card>
 
         <Card className="min-w-0">
           <CardHeader>
-            <CardTitle>Movimenta\u00e7\u00f5es do caixa</CardTitle>
+            <CardTitle>Movimentações do caixa</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table className="min-w-[920px]">
@@ -283,9 +283,9 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
                   <TableHead>Tipo</TableHead>
                   <TableHead>Forma</TableHead>
                   <TableHead>Categoria</TableHead>
-                  <TableHead>Descri\u00e7\u00e3o</TableHead>
+                  <TableHead>Descrição</TableHead>
                   <TableHead>Valor</TableHead>
-                  <TableHead>Usu\u00e1rio</TableHead>
+                  <TableHead>Usuário</TableHead>
                   <TableHead>Origem</TableHead>
                 </TableRow>
               </TableHeader>
@@ -294,7 +294,7 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
                   <TableRow key={mov.id}>
                     <TableCell className="whitespace-nowrap">{formatDateTime(mov.movimentadoEm)}</TableCell>
                     <TableCell>
-                      <Badge tone={mov.tipo === "ENTRADA" ? "success" : "danger"}>{mov.tipo === "ENTRADA" ? "Entrada" : "Sa\u00edda"}</Badge>
+                      <Badge tone={mov.tipo === "ENTRADA" ? "success" : "danger"}>{mov.tipo === "ENTRADA" ? "Entrada" : "Saída"}</Badge>
                     </TableCell>
                     <TableCell>{formatFormaPagamento(mov.formaPagamento)}</TableCell>
                     <TableCell className="min-w-36 whitespace-normal">{mov.categoria}</TableCell>
@@ -395,8 +395,8 @@ function formatFormaPagamento(value: string) {
   const labels: Record<string, string> = {
     DINHEIRO: "Dinheiro",
     PIX: "PIX",
-    CARTAO_CREDITO: "Cart\u00e3o cr\u00e9dito",
-    CARTAO_DEBITO: "Cart\u00e3o d\u00e9bito"
+    CARTAO_CREDITO: "Cartão crédito",
+    CARTAO_DEBITO: "Cartão débito"
   };
   return labels[value] ?? value;
 }

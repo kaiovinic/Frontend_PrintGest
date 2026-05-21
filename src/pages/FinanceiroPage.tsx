@@ -370,9 +370,9 @@ function Despesas({ data, form, setForm, expanded, setExpanded, grupoEditando, s
         <Metric title="Despesas cadastradas" value={String(data.resumo.totalDespesas)} tone="cyan" />
         <Metric title="Vencem hoje" value={String(data.resumo.vencimentoHoje)} tone="rose" />
         <Metric title="Valor vence hoje" value={formatCurrency(data.resumo.valorVencimentoHoje)} tone="rose" />
-        <Metric title="Gastos do m??s" value={formatCurrency(data.resumo.totalMes)} tone="amber" />
-        <Metric title="N??o pagas" value={formatCurrency(data.resumo.totalNaoPagoMes)} tone="rose" />
-        <Metric title="Pago no m??s" value={formatCurrency(data.resumo.totalPagoMes)} tone="green" />
+        <Metric title="Gastos do mês" value={formatCurrency(data.resumo.totalMes)} tone="amber" />
+        <Metric title="Não pagas" value={formatCurrency(data.resumo.totalNaoPagoMes)} tone="rose" />
+        <Metric title="Pago no mês" value={formatCurrency(data.resumo.totalPagoMes)} tone="green" />
       </section>
       <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
         <Card>
@@ -387,16 +387,16 @@ function Despesas({ data, form, setForm, expanded, setExpanded, grupoEditando, s
               </Select>
             </Field>
             {form.categoria === "__nova" && <Field label="Nova categoria"><Input value={form.novaCategoria} onChange={(event) => setForm((current) => ({ ...current, novaCategoria: event.target.value }))} /></Field>}
-            <Field label="Descri????o"><Input value={form.descricao} onChange={(event) => setForm((current) => ({ ...current, descricao: event.target.value }))} /></Field>
+            <Field label="Descrição"><Input value={form.descricao} onChange={(event) => setForm((current) => ({ ...current, descricao: event.target.value }))} /></Field>
             <Field label="Valor total"><Input value={form.valor} onChange={(event) => setForm((current) => ({ ...current, valor: maskCurrency(event.target.value) }))} /></Field>
             <Field label="Vencimento inicial"><Input type="date" value={form.vencimento} onChange={(event) => setForm((current) => ({ ...current, vencimento: event.target.value }))} /></Field>
-            <Field label="Condi????o"><Select value={form.condicaoPagamento} onChange={(value) => setForm((current) => ({ ...current, condicaoPagamento: value as DespesaForm["condicaoPagamento"] }))}><option value="A_VISTA">?? vista</option><option value="PARCELADO">Parcelado</option></Select></Field>
+            <Field label="Condição"><Select value={form.condicaoPagamento} onChange={(value) => setForm((current) => ({ ...current, condicaoPagamento: value as DespesaForm["condicaoPagamento"] }))}><option value="A_VISTA">À vista</option><option value="PARCELADO">Parcelado</option></Select></Field>
             {form.condicaoPagamento === "PARCELADO" && <Field label="Quantidade de parcelas"><Input value={form.quantidadeParcelas} onChange={(event) => setForm((current) => ({ ...current, quantidadeParcelas: event.target.value.replace(/\D/g, "") }))} /></Field>}
-            <Field label="Observa????o"><Input value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} /></Field>
-            {parcelasPreview.length > 1 && <div className="rounded-md border p-3 text-sm"><p className="mb-2 font-black">Pr??via das parcelas</p>{parcelasPreview.map((parcela) => <p key={parcela.numero}>{parcela.numero}/{parcelasPreview.length} - {formatCurrency(parcela.valor)} - {formatDate(parcela.vencimento)}</p>)}</div>}
+            <Field label="Observação"><Input value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} /></Field>
+            {parcelasPreview.length > 1 && <div className="rounded-md border p-3 text-sm"><p className="mb-2 font-black">Prévia das parcelas</p>{parcelasPreview.map((parcela) => <p key={parcela.numero}>{parcela.numero}/{parcelasPreview.length} - {formatCurrency(parcela.valor)} - {formatDate(parcela.vencimento)}</p>)}</div>}
             <div className="flex flex-wrap gap-2">
-              {grupoEditando && <Button variant="outline" onClick={cancelarEdicao} disabled={isSaving}>Cancelar edi????o</Button>}
-              <Button onClick={onSave} disabled={isSaving}><Plus size={16} />{isSaving ? "Salvando..." : grupoEditando ? "Salvar altera????es" : "Cadastrar despesa"}</Button>
+              {grupoEditando && <Button variant="outline" onClick={cancelarEdicao} disabled={isSaving}>Cancelar edição</Button>}
+              <Button onClick={onSave} disabled={isSaving}><Plus size={16} />{isSaving ? "Salvando..." : grupoEditando ? "Salvar alterações" : "Cadastrar despesa"}</Button>
             </div>
           </CardContent>
         </Card>
@@ -404,7 +404,7 @@ function Despesas({ data, form, setForm, expanded, setExpanded, grupoEditando, s
           <CardHeader><CardTitle>Contas e despesas</CardTitle></CardHeader>
           <CardContent className="overflow-x-auto">
             <Table className="min-w-[980px]">
-              <TableHeader><TableRow><TableHead></TableHead><TableHead>Categoria</TableHead><TableHead>Descri????o</TableHead><TableHead>Parcelas</TableHead><TableHead>Valor total</TableHead><TableHead>Aberto</TableHead><TableHead>Status</TableHead><TableHead>A????o</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead></TableHead><TableHead>Categoria</TableHead><TableHead>Descrição</TableHead><TableHead>Parcelas</TableHead><TableHead>Valor total</TableHead><TableHead>Aberto</TableHead><TableHead>Status</TableHead><TableHead>Ação</TableHead></TableRow></TableHeader>
               <TableBody>
                 {grupos.map((grupo) => (
                   <FragmentGroup key={grupo.id} grupo={grupo} expanded={Boolean(expanded[grupo.id])} onToggle={() => setExpanded((current) => ({ ...current, [grupo.id]: !current[grupo.id] }))} onEdit={editarGrupo} onPay={onPay} />
