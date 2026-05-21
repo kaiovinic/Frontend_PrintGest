@@ -1,4 +1,4 @@
-import { Filter, Plus } from "lucide-react";
+import { Eye, Filter, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Page } from "@/components/AppLayout";
 import { Badge } from "@/components/ui/badge";
@@ -161,6 +161,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                 <TableHead>Total</TableHead>
                 <TableHead>Pago</TableHead>
                 <TableHead>Saldo</TableHead>
+                <TableHead>Devolução</TableHead>
                 <TableHead>Motivo cancelamento</TableHead>
                 <TableHead>Ação</TableHead>
               </TableRow>
@@ -168,13 +169,13 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={9}>Carregando pedidos...</TableCell>
+                  <TableCell colSpan={10}>Carregando pedidos...</TableCell>
                 </TableRow>
               )}
 
               {error && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-destructive">
+                  <TableCell colSpan={10} className="text-destructive">
                     {error}
                   </TableCell>
                 </TableRow>
@@ -185,6 +186,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                 pedidosFiltrados.map((pedido) => {
                   const tipo = formatTipoPedido(pedido.tipo);
                   const pedidoStatus = formatStatusPedido(pedido.status);
+                  const saldoTabela = pedidoStatus === "Cancelado" ? Math.max(pedido.valorPago - (pedido.valorEstornado ?? 0), 0) : pedido.saldoDevedor;
 
                   return (
                     <TableRow key={pedido.id}>
@@ -196,14 +198,21 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                       </TableCell>
                       <TableCell>{formatCurrency(pedido.total)}</TableCell>
                       <TableCell>{formatCurrency(pedido.valorPago)}</TableCell>
-                      <TableCell>{formatCurrency(pedido.saldoDevedor)}</TableCell>
+                      <TableCell>{formatCurrency(saldoTabela)}</TableCell>
+                      <TableCell>{pedido.valorEstornado > 0 ? formatCurrency(pedido.valorEstornado) : "-"}</TableCell>
                       <TableCell className="max-w-64 whitespace-normal text-sm text-muted-foreground">
                         {pedidoStatus === "Cancelado" ? pedido.motivoCancelamento || "-" : "-"}
                       </TableCell>
                       <TableCell>
-                        <Button size="sm" variant="outline" onClick={() => setPage("novo-pedido", pedido)}>
-                          Editar
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" onClick={() => setPage("recibo-pedido", pedido)}>
+                            <Eye size={14} />
+                            Ver
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setPage("novo-pedido", pedido)}>
+                            Editar
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

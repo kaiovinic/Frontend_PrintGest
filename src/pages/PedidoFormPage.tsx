@@ -11,6 +11,7 @@ import {
   cancelarPedido,
   criarOrcamento,
   criarPedido,
+  estornarPedido,
   finalizarPedido,
   obterPedido,
   type PedidoDetalhe,
@@ -54,10 +55,22 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const [isSaving, setIsSaving] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [valorDevolvido, setValorDevolvido] = useState(formatCurrency(0));
+  const [formaDevolucao, setFormaDevolucao] = useState("PIX");
+  const [observacaoEstorno, setObservacaoEstorno] = useState("");
   const [isCanceling, setIsCanceling] = useState(false);
+  const [estornoModalOpen, setEstornoModalOpen] = useState(false);
+  const [novoValorDevolvido, setNovoValorDevolvido] = useState(formatCurrency(0));
+  const [novaFormaDevolucao, setNovaFormaDevolucao] = useState("PIX");
+  const [novaObservacaoEstorno, setNovaObservacaoEstorno] = useState("");
+  const [isEstornando, setIsEstornando] = useState(false);
   const [finalizarModalOpen, setFinalizarModalOpen] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [saldoDevedor, setSaldoDevedor] = useState(pedido?.saldoDevedor ?? 0);
+  const [valorPagoRegistrado, setValorPagoRegistrado] = useState(pedido?.valorPago ?? 0);
+  const [valorEstornado, setValorEstornado] = useState(0);
+  const [observacaoEstornoRegistrada, setObservacaoEstornoRegistrada] = useState("");
+  const [pagamentos, setPagamentos] = useState<PedidoDetalhe["pagamentos"]>([]);
   const [formaPagamentoFinalizacao, setFormaPagamentoFinalizacao] = useState("PIX");
   const [items, setItems] = useState<ItemPedido[]>([
     {
@@ -73,8 +86,21 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const parcelas = buildParcelas(condicaoPagamento, totalGeral, dataPedido, dataEntrega, Number(percentualEntrada || 0));
   const tipoBloqueado = Boolean(pedido) && tipoOriginal === "Pedido";
   const cancelReasonValido = cancelReason.trim().length >= 10;
+  const valorDevolvidoNumero = parseCurrency(valorDevolvido);
+  const devolucaoValida =
+    valorDevolvidoNumero >= 0 &&
+    valorDevolvidoNumero <= valorPagoRegistrado &&
+    (valorDevolvidoNumero === 0 || Boolean(formaDevolucao)) &&
+    (valorDevolvidoNumero === 0 || valorDevolvidoNumero === valorPagoRegistrado || observacaoEstorno.trim().length >= 10);
   const podeFinalizar = Boolean(pedido) && tipoOriginal === "Pedido" && statusAtual === "Aberto";
   const registroEncerrado = statusAtual === "Cancelado" || statusAtual === "Finalizado";
+  const valorRetidoAtual = Math.max(valorPagoRegistrado - valorEstornado, 0);
+  const novoValorDevolvidoNumero = parseCurrency(novoValorDevolvido);
+  const novoEstornoValido =
+    novoValorDevolvidoNumero > 0 &&
+    novoValorDevolvidoNumero <= valorRetidoAtual &&
+    Boolean(novaFormaDevolucao) &&
+    novaObservacaoEstorno.trim().length >= 10;
 
   useEffect(() => {
     if (!pedido?.id) {
@@ -122,7 +148,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       observacao: observacao || null,
       outrosItens: outrosItens || null,
       total: totalGeral,
-      valorPago: parcelas[0]?.valor ?? 0,
+      valorPago: pedido ? valorPagoRegistrado : parcelas[0]?.valor ?? 0,
       itens: items
         .filter((item) => item.descricao.trim() || Number(item.quantidade || 0) > 0 || item.tamanho.trim())
         .map((item) => ({
@@ -136,8 +162,8 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
 
     try {
       if (pedido) {
-        if (tipoOriginal === "Pedido" && tipo === "OrÃ§amento") {
-          setStatusMensagem("NÃ£o Ã© permitido transformar um pedido em orÃ§amento. Se o cliente desistiu, use a opÃ§Ã£o Cancelar.");
+        if (tipoOriginal === "Pedido" && tipo === "Orçamento") {
+          setStatusMensagem("Não é permitido transformar um pedido em orçamento. Se o cliente desistiu, use a opção Cancelar.");
           return;
         }
 
@@ -177,15 +203,61 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setIsCanceling(true);
 
     try {
-      await cancelarPedido(pedido.id, usuarioId, cancelReason);
+      await cancelarPedido(pedido.id, {
+        usuarioId,
+        observacao: cancelReason,
+        valorDevolvido: valorDevolvidoNumero,
+        formaDevolucao: valorDevolvidoNumero > 0 ? formaDevolucao : null,
+        observacaoEstorno: observacaoEstorno.trim() || null
+      });
       setStatusAtual("Cancelado");
+      setValorEstornado(valorDevolvidoNumero);
+      setObservacaoEstornoRegistrada(observacaoEstorno);
       setCancelModalOpen(false);
       setCancelReason("");
+      setValorDevolvido(formatCurrency(0));
+      setObservacaoEstorno("");
       setStatusMensagem(`${tipoOriginal} cancelado com sucesso.`);
     } catch (error) {
       setStatusMensagem(error instanceof ApiError ? error.message : "Não foi possível cancelar este registro.");
     } finally {
       setIsCanceling(false);
+    }
+  }
+
+  async function confirmarNovoEstorno() {
+    if (!pedido) {
+      return;
+    }
+
+    setStatusMensagem(null);
+    if (!novoEstornoValido) {
+      setStatusMensagem("Informe valor, forma e observacao da devolucao complementar.");
+      return;
+    }
+
+    setIsEstornando(true);
+
+    try {
+      await estornarPedido(pedido.id, {
+        usuarioId,
+        valorDevolvido: novoValorDevolvidoNumero,
+        formaDevolucao: novaFormaDevolucao,
+        observacao: novaObservacaoEstorno.trim()
+      });
+      setValorEstornado((current) => current + novoValorDevolvidoNumero);
+      setObservacaoEstornoRegistrada((current) =>
+        current ? `${current}\n${novaObservacaoEstorno.trim()}` : novaObservacaoEstorno.trim()
+      );
+      setEstornoModalOpen(false);
+      setNovoValorDevolvido(formatCurrency(0));
+      setNovaFormaDevolucao("PIX");
+      setNovaObservacaoEstorno("");
+      setStatusMensagem("Devolucao complementar registrada com sucesso.");
+    } catch (error) {
+      setStatusMensagem(error instanceof ApiError ? error.message : "Nao foi possivel registrar a devolucao complementar.");
+    } finally {
+      setIsEstornando(false);
     }
   }
 
@@ -208,6 +280,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
         formaPagamento: saldoDevedor > 0 ? formaPagamentoFinalizacao : null
       });
       setStatusAtual("Finalizado");
+      setValorPagoRegistrado((current) => current + saldoDevedor);
       setSaldoDevedor(0);
       setFinalizarModalOpen(false);
       setStatusMensagem("Pedido finalizado com sucesso.");
@@ -230,6 +303,10 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setTipoOriginal("Pedido");
     setStatusAtual("");
     setSaldoDevedor(0);
+    setValorPagoRegistrado(0);
+    setValorEstornado(0);
+    setObservacaoEstornoRegistrada("");
+    setPagamentos([]);
     setDataPedido(new Date().toISOString().slice(0, 10));
     setDataEntrega("");
     setFormaPagamento("PIX");
@@ -255,6 +332,10 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setTipoOriginal(formatTipoPedido(detalhe.tipo));
     setStatusAtual(formatStatusPedido(detalhe.status));
     setSaldoDevedor(detalhe.saldoDevedor);
+    setValorPagoRegistrado(detalhe.valorPago);
+    setValorEstornado(detalhe.valorEstornado ?? 0);
+    setObservacaoEstornoRegistrada(detalhe.observacaoEstorno ?? "");
+    setPagamentos(detalhe.pagamentos ?? []);
     setDataPedido(detalhe.dataPedido);
     setDataEntrega(detalhe.dataEntrega ?? "");
     setFormaPagamento(toUiFormaPagamento(detalhe.formaPagamento));
@@ -298,6 +379,11 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
               Cancelar {tipoOriginal.toLowerCase()}
             </Button>
           </div>
+        )}
+        {pedido && statusAtual === "Cancelado" && valorRetidoAtual > 0 && (
+          <Button variant="outline" onClick={() => setEstornoModalOpen(true)}>
+            Registrar nova devolucao
+          </Button>
         )}
       </div>
 
@@ -390,7 +476,32 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
                 </Select>
               </label>
               <Field label="Total geral" value={formatCurrency(totalGeral)} onChange={() => undefined} readOnly />
+              {pedido && <Field label="Pago registrado" value={formatCurrency(valorPagoRegistrado)} onChange={() => undefined} readOnly />}
+              {pedido && <Field label="Saldo devedor" value={formatCurrency(saldoDevedor)} onChange={() => undefined} readOnly />}
+              {pedido && valorEstornado > 0 && <Field label="Valor devolvido" value={formatCurrency(valorEstornado)} onChange={() => undefined} readOnly />}
+              {pedido && valorEstornado > 0 && <Field label="Valor retido" value={formatCurrency(valorRetidoAtual)} onChange={() => undefined} readOnly />}
             </div>
+
+            {pedido && observacaoEstornoRegistrada && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                Observação da devolução: {observacaoEstornoRegistrada}
+              </p>
+            )}
+
+            {pedido && pagamentos.length > 0 && (
+              <div className="rounded-lg border p-4">
+                <p className="mb-3 text-sm font-black">Pagamentos registrados</p>
+                <div className="space-y-2">
+                  {pagamentos.map((pagamento) => (
+                    <div key={pagamento.id} className="grid gap-2 rounded-md bg-muted/40 p-3 text-sm md:grid-cols-[1fr_1fr_1fr]">
+                      <span className="font-semibold">{formatCurrency(pagamento.valor)}</span>
+                      <span>{formatFormaPagamento(pagamento.formaPagamento)}</span>
+                      <span>{formatDateTime(pagamento.registradoEm)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="rounded-lg border p-4">
               <p className="mb-3 text-sm font-black">Parcelas</p>
@@ -454,13 +565,87 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
               </span>
             </label>
 
+            {valorPagoRegistrado > 0 && (
+              <div className="mt-5 space-y-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                <p className="font-semibold">
+                  Este pedido possui {formatCurrency(valorPagoRegistrado)} pago. Informe se haverá devolução ao cliente. O valor devolvido será lançado como saída no caixa.
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field label="Valor devolvido" value={valorDevolvido} onChange={(value) => setValorDevolvido(maskCurrency(value))} />
+                  <label>
+                    <span className="field-label">Forma da devolução</span>
+                    <Select value={formaDevolucao} onChange={setFormaDevolucao}>
+                      <option value="PIX">PIX</option>
+                      <option value="Dinheiro">Dinheiro</option>
+                      <option value="CARTAO_CREDITO">Cartão de crédito</option>
+                      <option value="CARTAO_DEBITO">Cartão de débito</option>
+                    </Select>
+                  </label>
+                </div>
+                <TextField label="Observação da devolução" value={observacaoEstorno} onChange={setObservacaoEstorno} />
+                <p className="text-xs font-semibold">
+                  Valor retido pela empresa: {formatCurrency(Math.max(valorPagoRegistrado - valorDevolvidoNumero, 0))}.
+                  {valorDevolvidoNumero > 0 && valorDevolvidoNumero < valorPagoRegistrado ? " Para devolução parcial, a observação deve ter pelo menos 10 caracteres." : ""}
+                </p>
+              </div>
+            )}
+
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <Button variant="outline" onClick={() => setCancelModalOpen(false)} disabled={isCanceling}>
                 Voltar
               </Button>
-              <Button variant="destructive" onClick={confirmarCancelamento} disabled={isCanceling || !cancelReasonValido}>
+              <Button variant="destructive" onClick={confirmarCancelamento} disabled={isCanceling || !cancelReasonValido || !devolucaoValida}>
                 <Ban size={16} />
                 {isCanceling ? "Cancelando..." : "Confirmar cancelamento"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {estornoModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
+          <div className="w-full max-w-lg rounded-lg border bg-background p-6 shadow-xl">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-amber-100 p-2 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black">Registrar nova devolucao</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Use esta acao para devolver depois uma parte do valor que ficou retido no cancelamento.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              <p className="font-semibold">Valor ainda retido: {formatCurrency(valorRetidoAtual)}.</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Valor devolvido" value={novoValorDevolvido} onChange={(value) => setNovoValorDevolvido(maskCurrency(value))} />
+                <label>
+                  <span className="field-label">Forma da devolucao</span>
+                  <Select value={novaFormaDevolucao} onChange={setNovaFormaDevolucao}>
+                    <option value="PIX">PIX</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="CARTAO_CREDITO">Cartao de credito</option>
+                    <option value="CARTAO_DEBITO">Cartao de debito</option>
+                  </Select>
+                </label>
+              </div>
+              <TextField label="Observacao da nova devolucao" value={novaObservacaoEstorno} onChange={setNovaObservacaoEstorno} />
+              <p className="text-xs font-semibold">
+                Depois desta devolucao, ainda ficara retido: {formatCurrency(Math.max(valorRetidoAtual - novoValorDevolvidoNumero, 0))}.
+                A observacao deve ter pelo menos 10 caracteres.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <Button variant="outline" onClick={() => setEstornoModalOpen(false)} disabled={isEstornando}>
+                Voltar
+              </Button>
+              <Button onClick={confirmarNovoEstorno} disabled={isEstornando || !novoEstornoValido}>
+                <CheckCircle2 size={16} />
+                {isEstornando ? "Registrando..." : "Registrar devolucao"}
               </Button>
             </div>
           </div>
@@ -545,6 +730,25 @@ function toUiCondicaoPagamento(value: string | null): CondicaoPagamento {
   return "Parcelado";
 }
 
+function formatFormaPagamento(value: string) {
+  const labels: Record<string, string> = {
+    DINHEIRO: "Dinheiro",
+    PIX: "PIX",
+    CARTAO_CREDITO: "Cartão de crédito",
+    CARTAO_DEBITO: "Cartão de débito"
+  };
+  return labels[value] ?? value;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
+}
+
 function Field({
   label,
   value,
@@ -602,3 +806,5 @@ function Select({
     </select>
   );
 }
+
+

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AppLayout, type Page } from "@/components/AppLayout";
+import { CaixaPage } from "@/pages/CaixaPage";
 import { ContaPage } from "@/pages/ContaPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { EditarOrcamentoPage } from "@/pages/EditarOrcamentoPage";
@@ -8,6 +9,7 @@ import { FinanceiroPage } from "@/pages/FinanceiroPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { LogsPage } from "@/pages/LogsPage";
 import { PedidoFormPage } from "@/pages/PedidoFormPage";
+import { PedidoReciboPage } from "@/pages/PedidoReciboPage";
 import { PedidosPage } from "@/pages/PedidosPage";
 import { UsuariosPage } from "@/pages/UsuariosPage";
 import type { AuthUser } from "@/services/authService";
@@ -111,8 +113,10 @@ export default function App() {
       {page === "dashboard" && <DashboardPage setPage={setPage} />}
       {page === "pedidos" && <PedidosPage setPage={setPage} />}
       {page === "novo-pedido" && <PedidoFormPage pedido={selectedPedido} usuarioId={user.usuarioId} />}
+      {page === "recibo-pedido" && <PedidoReciboPage pedido={selectedPedido} />}
       {page === "editar-orcamento" && <EditarOrcamentoPage />}
       {page === "estoque" && <EstoquePage usuarioId={user.usuarioId} />}
+      {page === "caixa" && <CaixaPage usuarioId={user.usuarioId} />}
       {page === "financeiro" && <FinanceiroPage />}
       {page === "usuarios" && <UsuariosPage />}
       {page === "logs" && <LogsPage />}
@@ -145,6 +149,6 @@ function pageFromHash(): Page | null {
 }
 
 function parsePage(value: string | null): Page | null {
-  const pages: Page[] = ["dashboard", "pedidos", "novo-pedido", "editar-orcamento", "estoque", "financeiro", "usuarios", "logs", "conta"];
+  const pages: Page[] = ["dashboard", "pedidos", "novo-pedido", "recibo-pedido", "editar-orcamento", "estoque", "caixa", "financeiro", "usuarios", "logs", "conta"];
   return value && pages.includes(value as Page) ? (value as Page) : null;
 }

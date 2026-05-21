@@ -1,4 +1,4 @@
-import { apiRequest } from "@/services/api";
+﻿import { apiRequest } from "@/services/api";
 
 export type PedidoResumo = {
   id: number;
@@ -10,6 +10,7 @@ export type PedidoResumo = {
   dataEntrega: string | null;
   total: number;
   valorPago: number;
+  valorEstornado: number;
   saldoDevedor: number;
   criadoPor: string;
   motivoCancelamento: string | null;
@@ -37,11 +38,15 @@ export type PedidoDetalhe = {
   fundo: string | null;
   observacao: string | null;
   motivoCancelamento: string | null;
+  valorEstornado: number;
+  valorRetido: number;
+  observacaoEstorno: string | null;
   outrosItens: string | null;
   total: number;
   valorPago: number;
   saldoDevedor: number;
   itens: PedidoItemDetalhe[];
+  pagamentos: PedidoPagamentoDetalhe[];
 };
 
 export type PedidoItemDetalhe = {
@@ -51,6 +56,16 @@ export type PedidoItemDetalhe = {
   quantidade: number;
   valorUnitario: number;
   valorTotal: number;
+};
+
+export type PedidoPagamentoDetalhe = {
+  id: number;
+  formaPagamento: string;
+  condicaoPagamento: string;
+  valor: number;
+  observacao: string | null;
+  registradoEm: string;
+  usuario: string;
 };
 
 export type PedidoPayload = {
@@ -125,13 +140,32 @@ export function atualizarOrcamento(id: number, payload: PedidoPayload) {
   });
 }
 
-export function cancelarPedido(id: number, usuarioId: number, observacao?: string | null) {
+export type CancelarPedidoPayload = {
+  usuarioId: number;
+  observacao?: string | null;
+  valorDevolvido: number;
+  formaDevolucao?: string | null;
+  observacaoEstorno?: string | null;
+};
+
+export function cancelarPedido(id: number, payload: CancelarPedidoPayload) {
   return apiRequest<void>(`/pedidos/${id}/cancelar`, {
     method: "PATCH",
-    body: {
-      usuarioId,
-      observacao: observacao || null
-    }
+    body: payload
+  });
+}
+
+export type EstornarPedidoPayload = {
+  usuarioId: number;
+  valorDevolvido: number;
+  formaDevolucao: string;
+  observacao: string;
+};
+
+export function estornarPedido(id: number, payload: EstornarPedidoPayload) {
+  return apiRequest<void>(`/pedidos/${id}/estornar`, {
+    method: "PATCH",
+    body: payload
   });
 }
 
@@ -148,3 +182,6 @@ export function finalizarPedido(id: number, payload: FinalizarPedidoPayload) {
     body: payload
   });
 }
+
+
+

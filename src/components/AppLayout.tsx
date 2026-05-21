@@ -1,4 +1,4 @@
-import { ArrowLeft, BarChart3, ClipboardList, KeyRound, LayoutDashboard, LogOut, Package, ScrollText, Users } from "lucide-react";
+import { ArrowLeft, Banknote, BarChart3, ClipboardList, KeyRound, LayoutDashboard, LogOut, Package, ScrollText, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -8,8 +8,10 @@ export type Page =
   | "dashboard"
   | "pedidos"
   | "novo-pedido"
+  | "recibo-pedido"
   | "editar-orcamento"
   | "estoque"
+  | "caixa"
   | "financeiro"
   | "usuarios"
   | "logs"
@@ -31,6 +33,7 @@ const navItems = [
   { page: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] },
   { page: "pedidos" as const, label: "Pedidos", icon: ClipboardList, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] },
   { page: "estoque" as const, label: "Estoque", icon: Package, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] },
+  { page: "caixa" as const, label: "Caixa", icon: Banknote, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] },
   { page: "financeiro" as const, label: "Financeiro", icon: BarChart3, perfis: ["ADMIN", "GERENTE"] },
   { page: "usuarios" as const, label: "Usuários", icon: Users, perfis: ["ADMIN"] },
   { page: "logs" as const, label: "Logs", icon: ScrollText, perfis: ["ADMIN", "GERENTE"] },

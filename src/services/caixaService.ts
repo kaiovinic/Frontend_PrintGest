@@ -1,0 +1,63 @@
+import { apiRequest } from "@/services/api";
+
+export type CaixaResumo = {
+  entradas: number;
+  saidas: number;
+  saldo: number;
+  dinheiro: number;
+  pix: number;
+  cartaoCredito: number;
+  cartaoDebito: number;
+};
+
+export type CaixaMovimentacao = {
+  id: string;
+  tipo: "ENTRADA" | "SAIDA";
+  formaPagamento: string;
+  categoria: string;
+  descricao: string;
+  valor: number;
+  movimentadoEm: string;
+  usuario: string;
+  observacao?: string | null;
+  origem: "PEDIDO" | "MANUAL";
+};
+
+export type CaixaMovimentacaoPayload = {
+  usuarioId: number;
+  pedidoId: number | null;
+  tipo: "ENTRADA" | "SAIDA";
+  formaPagamento: string;
+  categoria: string;
+  descricao: string;
+  valor: number;
+  observacao: string | null;
+};
+
+type CaixaFiltros = {
+  inicio?: string;
+  fim?: string;
+};
+
+function queryString(filtros?: CaixaFiltros) {
+  const params = new URLSearchParams();
+  if (filtros?.inicio) params.set("inicio", filtros.inicio);
+  if (filtros?.fim) params.set("fim", filtros.fim);
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export function obterResumoCaixa(filtros?: CaixaFiltros) {
+  return apiRequest<CaixaResumo>(`/caixa/resumo${queryString(filtros)}`);
+}
+
+export function listarMovimentacoesCaixa(filtros?: CaixaFiltros) {
+  return apiRequest<CaixaMovimentacao[]>(`/caixa/movimentacoes${queryString(filtros)}`);
+}
+
+export function criarMovimentacaoCaixa(payload: CaixaMovimentacaoPayload) {
+  return apiRequest<{ id: number }>("/caixa/movimentacoes", {
+    method: "POST",
+    body: payload
+  });
+}
