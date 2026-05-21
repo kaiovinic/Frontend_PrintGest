@@ -117,7 +117,7 @@ export default function App() {
       {page === "editar-orcamento" && <EditarOrcamentoPage />}
       {page === "estoque" && <EstoquePage usuarioId={user.usuarioId} />}
       {page === "caixa" && <CaixaPage usuarioId={user.usuarioId} />}
-      {page === "financeiro" && <FinanceiroPage />}
+      {page === "financeiro" && <FinanceiroPage usuarioId={user.usuarioId} />}
       {page === "usuarios" && <UsuariosPage />}
       {page === "logs" && <LogsPage />}
       {page === "conta" && <ContaPage user={user} />}

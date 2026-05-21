@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,19 +6,184 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs } from "@/components/ui/tabs";
-import { listarDespesas, type Despesa } from "@/services/financeiroService";
-import { listarPedidos, type PedidoResumo } from "@/services/pedidoService";
-import { formatCurrency } from "@/utils/formatters";
+import { cn } from "@/lib/utils";
+import {
+  criarDespesa,
+  obterDespesasFinanceiro,
+  obterEntradasFinanceiro,
+  obterGraficosFinanceiro,
+  obterVendasFinanceiro,
+  pagarDespesa,
+  type Despesa,
+  type DespesasFinanceiro,
+  type EntradasFinanceiro,
+  type FinanceiroFiltros,
+  type GraficosFinanceiro,
+  type VendasFinanceiro
+} from "@/services/financeiroService";
+import { formatCurrency, formatDate, maskCurrency, parseCurrency } from "@/utils/formatters";
 
-export function FinanceiroPage() {
+type FinanceiroPageProps = {
+  usuarioId: number;
+};
+
+type DespesaForm = {
+  categoria: string;
+  novaCategoria: string;
+  descricao: string;
+  valor: string;
+  vencimento: string;
+  condicaoPagamento: "A_VISTA" | "PARCELADO";
+  quantidadeParcelas: string;
+  observacao: string;
+};
+
+const hoje = new Date();
+const mesAtual = String(hoje.getMonth() + 1).padStart(2, "0");
+const anoAtual = String(hoje.getFullYear());
+const meses = [
+  ["01", "Janeiro"],
+  ["02", "Fevereiro"],
+  ["03", "Março"],
+  ["04", "Abril"],
+  ["05", "Maio"],
+  ["06", "Junho"],
+  ["07", "Julho"],
+  ["08", "Agosto"],
+  ["09", "Setembro"],
+  ["10", "Outubro"],
+  ["11", "Novembro"],
+  ["12", "Dezembro"]
+];
+
+const emptyVendas: VendasFinanceiro = {
+  resumo: {
+    totalVendas: 0,
+    valorRecebido: 0,
+    valorPendente: 0,
+    quantidadePedidos: 0,
+    quantidadeDevolucoes: 0,
+    valorDevolvido: 0,
+    pedidosEmAndamento: 0,
+    valorEntrouHoje: 0
+  },
+  pedidos: []
+};
+
+const emptyEntradas: EntradasFinanceiro = {
+  resumo: { total: 0, dinheiro: 0, pix: 0, cartaoCredito: 0, cartaoDebito: 0, entrouHoje: 0 },
+  entradas: []
+};
+
+const emptyDespesas: DespesasFinanceiro = {
+  resumo: { totalDespesas: 0, vencimentoHoje: 0, valorVencimentoHoje: 0, totalMes: 0, totalNaoPagoMes: 0, totalPagoMes: 0 },
+  categorias: ["Água", "Luz", "Funcionários", "13º", "Contador", "Fornecedor", "Material", "Limpeza"],
+  despesas: []
+};
+
+const emptyGraficos: GraficosFinanceiro = {
+  ano: Number(anoAtual),
+  mes: Number(mesAtual),
+  receitaAnual: [],
+  despesaAnual: [],
+  despesasMes: [],
+  clientesMes: []
+};
+
+const emptyForm: DespesaForm = {
+  categoria: "",
+  novaCategoria: "",
+  descricao: "",
+  valor: formatCurrency(0),
+  vencimento: new Date().toISOString().slice(0, 10),
+  condicaoPagamento: "A_VISTA",
+  quantidadeParcelas: "2",
+  observacao: ""
+};
+
+export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
   const [tab, setTab] = useState("Vendas");
-  const [pedidos, setPedidos] = useState<PedidoResumo[]>([]);
-  const [despesas, setDespesas] = useState<Despesa[]>([]);
+  const [ano, setAno] = useState(anoAtual);
+  const [mes, setMes] = useState(mesAtual);
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFinal, setDataFinal] = useState("");
+  const [status, setStatus] = useState("");
+  const [vendas, setVendas] = useState<VendasFinanceiro>(emptyVendas);
+  const [entradas, setEntradas] = useState<EntradasFinanceiro>(emptyEntradas);
+  const [despesas, setDespesas] = useState<DespesasFinanceiro>(emptyDespesas);
+  const [graficos, setGraficos] = useState<GraficosFinanceiro>(emptyGraficos);
+  const [form, setForm] = useState<DespesaForm>(emptyForm);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [mensagem, setMensagem] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const filtros = useMemo<FinanceiroFiltros>(() => {
+    if (dataInicio || dataFinal) {
+      return { inicio: dataInicio || undefined, fim: dataFinal || undefined, status: status || undefined };
+    }
+    return { ano, mes, status: status || undefined };
+  }, [ano, dataFinal, dataInicio, mes, status]);
 
   useEffect(() => {
-    listarPedidos().then(setPedidos).catch(() => setPedidos([]));
-    listarDespesas().then(setDespesas).catch(() => setDespesas([]));
-  }, []);
+    carregarDados();
+  }, [filtros]);
+
+  async function carregarDados() {
+    const [vendasResponse, entradasResponse, despesasResponse, graficosResponse] = await Promise.all([
+      obterVendasFinanceiro(filtros).catch(() => emptyVendas),
+      obterEntradasFinanceiro(filtros).catch(() => emptyEntradas),
+      obterDespesasFinanceiro(filtros).catch(() => emptyDespesas),
+      obterGraficosFinanceiro({ ano, mes }).catch(() => emptyGraficos)
+    ]);
+    setVendas(vendasResponse);
+    setEntradas(entradasResponse);
+    setDespesas({ ...despesasResponse, categorias: [...new Set([...emptyDespesas.categorias, ...despesasResponse.categorias])].sort((a, b) => a.localeCompare(b, "pt-BR")) });
+    setGraficos(graficosResponse);
+  }
+
+  function limparFiltro() {
+    setAno(anoAtual);
+    setMes(mesAtual);
+    setDataInicio("");
+    setDataFinal("");
+    setStatus("");
+  }
+
+  async function salvarDespesa() {
+    const categoria = form.categoria === "__nova" ? form.novaCategoria.trim() : form.categoria;
+    const valor = parseCurrency(form.valor);
+    if (!categoria || !form.descricao.trim() || valor <= 0) {
+      setMensagem("Informe categoria, descrição e valor da despesa.");
+      return;
+    }
+
+    setMensagem(null);
+    setIsSaving(true);
+    try {
+      await criarDespesa({
+        usuarioId,
+        categoria,
+        descricao: form.descricao.trim(),
+        valor,
+        vencimento: form.vencimento,
+        condicaoPagamento: form.condicaoPagamento,
+        quantidadeParcelas: form.condicaoPagamento === "PARCELADO" ? Number(form.quantidadeParcelas || 1) : 1,
+        observacao: form.observacao.trim() || null
+      });
+      setForm(emptyForm);
+      setMensagem("Despesa cadastrada com sucesso.");
+      await carregarDados();
+    } catch {
+      setMensagem("Não foi possível cadastrar a despesa.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function marcarPaga(id: number) {
+    await pagarDespesa(id).catch(() => setMensagem("Não foi possível marcar a despesa como paga."));
+    await carregarDados();
+  }
 
   return (
     <div className="space-y-6">
@@ -29,216 +194,223 @@ export function FinanceiroPage() {
 
       <Tabs tabs={["Vendas", "Entradas", "Despesas", "Gráficos", "Clientes"]} active={tab} onChange={setTab} />
 
-      <Card>
-        <CardContent className="grid gap-3 p-5 md:grid-cols-[1fr_1fr_1fr_auto]">
-          <Input type="date" />
-          <Input type="date" />
-          <Input defaultValue="2026" />
-          <Button variant="outline">Limpar filtro</Button>
-        </CardContent>
-      </Card>
+      <FiltroFinanceiro ano={ano} mes={mes} dataInicio={dataInicio} dataFinal={dataFinal} status={status} setAno={setAno} setMes={setMes} setDataInicio={setDataInicio} setDataFinal={setDataFinal} setStatus={setStatus} onClear={limparFiltro} />
 
-      {tab === "Vendas" && <Vendas pedidos={pedidos} />}
-      {tab === "Entradas" && <Entradas pedidos={pedidos} />}
-      {tab === "Despesas" && <Despesas despesas={despesas} />}
-      {tab === "Gráficos" && <Graficos pedidos={pedidos} />}
-      {tab === "Clientes" && <Clientes pedidos={pedidos} />}
+      {mensagem && <p className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">{mensagem}</p>}
+
+      {tab === "Vendas" && <Vendas data={vendas} />}
+      {tab === "Entradas" && <Entradas data={entradas} />}
+      {tab === "Despesas" && <Despesas data={despesas} form={form} setForm={setForm} expanded={expanded} setExpanded={setExpanded} onSave={salvarDespesa} onPay={marcarPaga} isSaving={isSaving} />}
+      {tab === "Gráficos" && <Graficos data={graficos} />}
+      {tab === "Clientes" && <Clientes data={graficos} />}
     </div>
   );
 }
 
-function Vendas({ pedidos }: { pedidos: PedidoResumo[] }) {
-  const receita = pedidos.reduce((sum, pedido) => sum + pedido.valorPago, 0);
-  const pagos = pedidos.filter((pedido) => pedido.valorPago > 0).length;
-  const ticket = pagos > 0 ? receita / pagos : 0;
-
+function FiltroFinanceiro({ ano, mes, dataInicio, dataFinal, status, setAno, setMes, setDataInicio, setDataFinal, setStatus, onClear }: {
+  ano: string;
+  mes: string;
+  dataInicio: string;
+  dataFinal: string;
+  status: string;
+  setAno: (value: string) => void;
+  setMes: (value: string) => void;
+  setDataInicio: (value: string) => void;
+  setDataFinal: (value: string) => void;
+  setStatus: (value: string) => void;
+  onClear: () => void;
+}) {
+  const periodoAtivo = Boolean(dataInicio || dataFinal);
   return (
-    <>
-      <section className="grid gap-4 md:grid-cols-3">
-        <Metric title="Receita mês" value={formatCurrency(receita)} tone="green" />
-        <Metric title="Pedidos pagos" value={String(pagos)} tone="cyan" />
-        <Metric title="Ticket médio" value={formatCurrency(ticket)} tone="amber" />
+    <Card>
+      <CardContent className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-[120px_180px_1fr_1fr_180px_auto]">
+        <Field label="Ano"><Input value={ano} onChange={(event) => setAno(event.target.value)} disabled={periodoAtivo} /></Field>
+        <Field label="Mês">
+          <Select value={mes} onChange={setMes} disabled={periodoAtivo}>
+            {meses.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </Select>
+        </Field>
+        <Field label="Data início"><Input type="date" value={dataInicio} onChange={(event) => setDataInicio(event.target.value)} /></Field>
+        <Field label="Data final"><Input type="date" value={dataFinal} onChange={(event) => setDataFinal(event.target.value)} /></Field>
+        <Field label="Status pedido">
+          <Select value={status} onChange={setStatus}>
+            <option value="">Todos</option>
+            <option value="ABERTO">Aberto</option>
+            <option value="FINALIZADO">Finalizado</option>
+            <option value="CANCELADO">Cancelado</option>
+          </Select>
+        </Field>
+        <Button className="self-end" variant="outline" onClick={onClear}>Limpar</Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Vendas({ data }: { data: VendasFinanceiro }) {
+  return (
+    <div className="space-y-6">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric title="Valor recebido" value={formatCurrency(data.resumo.valorRecebido)} tone="green" />
+        <Metric title="Devoluções" value={String(data.resumo.quantidadeDevolucoes)} tone="rose" />
+        <Metric title="Valor devolvido" value={formatCurrency(data.resumo.valorDevolvido)} tone="rose" />
+        <Metric title="Pedidos em andamento" value={String(data.resumo.pedidosEmAndamento)} tone="cyan" />
+        <Metric title="Falta receber" value={formatCurrency(data.resumo.valorPendente)} tone="amber" />
+        <Metric title="Entrou hoje" value={formatCurrency(data.resumo.valorEntrouHoje)} tone="green" />
+        <Metric title="Qtd. pedidos" value={String(data.resumo.quantidadePedidos)} tone="cyan" />
+        <Metric title="Total vendido" value={formatCurrency(data.resumo.totalVendas)} tone="amber" />
       </section>
       <Card>
-        <CardHeader>
-          <CardTitle>Controle de vendas</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Consolidado de vendas</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
-          <Table>
+          <Table className="min-w-[1100px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Pedido</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Valor pago</TableHead>
-                <TableHead>Saldo</TableHead>
+                <TableHead>Pedido</TableHead><TableHead>Cliente</TableHead><TableHead>Status</TableHead><TableHead>Criado por</TableHead><TableHead>Total</TableHead><TableHead>Entrou</TableHead><TableHead>Devolução</TableHead><TableHead>Saiu</TableHead><TableHead>Falta pagar</TableHead><TableHead>Entrega</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pedidos.map((pedido) => (
+              {data.pedidos.map((pedido) => (
                 <TableRow key={pedido.id}>
                   <TableCell>{pedido.numero}</TableCell>
                   <TableCell>{pedido.cliente}</TableCell>
+                  <TableCell><Badge tone={statusTone(pedido.status)}>{formatStatus(pedido.status)}</Badge></TableCell>
+                  <TableCell>{pedido.criadoPor}</TableCell>
+                  <TableCell>{formatCurrency(pedido.total)}</TableCell>
                   <TableCell>{formatCurrency(pedido.valorPago)}</TableCell>
+                  <TableCell>{pedido.valorEstornado > 0 ? formatCurrency(pedido.valorEstornado) : "-"}</TableCell>
+                  <TableCell>{pedido.valorEstornado > 0 ? formatCurrency(pedido.valorEstornado) : "-"}</TableCell>
                   <TableCell>{formatCurrency(pedido.saldoDevedor)}</TableCell>
+                  <TableCell>{formatDate(pedido.dataEntrega)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function Entradas({ data }: { data: EntradasFinanceiro }) {
+  return (
+    <div className="space-y-6">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Metric title="Total entradas" value={formatCurrency(data.resumo.total)} tone="green" />
+        <Metric title="Dinheiro" value={formatCurrency(data.resumo.dinheiro)} tone="amber" />
+        <Metric title="PIX" value={formatCurrency(data.resumo.pix)} tone="green" />
+        <Metric title="Cartões" value={formatCurrency(data.resumo.cartaoCredito + data.resumo.cartaoDebito)} tone="cyan" />
+        <Metric title="Entrou hoje" value={formatCurrency(data.resumo.entrouHoje)} tone="green" />
+      </section>
+      <Card>
+        <CardHeader><CardTitle>Entradas registradas</CardTitle></CardHeader>
+        <CardContent className="overflow-x-auto">
+          <Table className="min-w-[900px]">
+            <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Forma</TableHead><TableHead>Origem</TableHead><TableHead>Descrição</TableHead><TableHead>Usuário</TableHead><TableHead>Valor</TableHead></TableRow></TableHeader>
+            <TableBody>{data.entradas.map((entrada, index) => <TableRow key={`${entrada.data}-${index}`}><TableCell>{formatDateTime(entrada.data)}</TableCell><TableCell>{formatForma(entrada.formaPagamento)}</TableCell><TableCell>{entrada.origem}</TableCell><TableCell>{entrada.descricao}</TableCell><TableCell>{entrada.usuario}</TableCell><TableCell className="font-bold">{formatCurrency(entrada.valor)}</TableCell></TableRow>)}</TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Despesas({ data, form, setForm, expanded, setExpanded, onSave, onPay, isSaving }: { data: DespesasFinanceiro; form: DespesaForm; setForm: React.Dispatch<React.SetStateAction<DespesaForm>>; expanded: Record<string, boolean>; setExpanded: React.Dispatch<React.SetStateAction<Record<string, boolean>>>; onSave: () => void; onPay: (id: number) => void; isSaving: boolean }) {
+  const grupos = useMemo(() => agruparDespesas(data.despesas), [data.despesas]);
+  const parcelasPreview = buildParcelasPreview(parseCurrency(form.valor), form.vencimento, form.condicaoPagamento === "PARCELADO" ? Number(form.quantidadeParcelas || 1) : 1);
+
+  return (
+    <div className="space-y-6">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        <Metric title="Despesas cadastradas" value={String(data.resumo.totalDespesas)} tone="cyan" />
+        <Metric title="Vencem hoje" value={String(data.resumo.vencimentoHoje)} tone="rose" />
+        <Metric title="Valor vence hoje" value={formatCurrency(data.resumo.valorVencimentoHoje)} tone="rose" />
+        <Metric title="Gastos do mês" value={formatCurrency(data.resumo.totalMes)} tone="amber" />
+        <Metric title="Não pagas" value={formatCurrency(data.resumo.totalNaoPagoMes)} tone="rose" />
+        <Metric title="Pago no mês" value={formatCurrency(data.resumo.totalPagoMes)} tone="green" />
+      </section>
+      <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <Card>
+          <CardHeader><CardTitle>Nova despesa</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <Field label="Categoria">
+              <Select value={form.categoria} onChange={(value) => setForm((current) => ({ ...current, categoria: value }))}>
+                <option value="">Selecione</option>
+                {data.categorias.map((categoria) => <option key={categoria} value={categoria}>{categoria}</option>)}
+                <option value="__nova">Criar nova categoria</option>
+              </Select>
+            </Field>
+            {form.categoria === "__nova" && <Field label="Nova categoria"><Input value={form.novaCategoria} onChange={(event) => setForm((current) => ({ ...current, novaCategoria: event.target.value }))} /></Field>}
+            <Field label="Descrição"><Input value={form.descricao} onChange={(event) => setForm((current) => ({ ...current, descricao: event.target.value }))} /></Field>
+            <Field label="Valor total"><Input value={form.valor} onChange={(event) => setForm((current) => ({ ...current, valor: maskCurrency(event.target.value) }))} /></Field>
+            <Field label="Vencimento inicial"><Input type="date" value={form.vencimento} onChange={(event) => setForm((current) => ({ ...current, vencimento: event.target.value }))} /></Field>
+            <Field label="Condição"><Select value={form.condicaoPagamento} onChange={(value) => setForm((current) => ({ ...current, condicaoPagamento: value as DespesaForm["condicaoPagamento"] }))}><option value="A_VISTA">À vista</option><option value="PARCELADO">Parcelado</option></Select></Field>
+            {form.condicaoPagamento === "PARCELADO" && <Field label="Quantidade de parcelas"><Input value={form.quantidadeParcelas} onChange={(event) => setForm((current) => ({ ...current, quantidadeParcelas: event.target.value.replace(/\D/g, "") }))} /></Field>}
+            <Field label="Observação"><Input value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} /></Field>
+            {parcelasPreview.length > 1 && <div className="rounded-md border p-3 text-sm"><p className="mb-2 font-black">Prévia das parcelas</p>{parcelasPreview.map((parcela) => <p key={parcela.numero}>{parcela.numero}/{parcelasPreview.length} - {formatCurrency(parcela.valor)} - {formatDate(parcela.vencimento)}</p>)}</div>}
+            <Button onClick={onSave} disabled={isSaving}><Plus size={16} />{isSaving ? "Salvando..." : "Cadastrar despesa"}</Button>
+          </CardContent>
+        </Card>
+        <Card className="min-w-0">
+          <CardHeader><CardTitle>Contas e despesas</CardTitle></CardHeader>
+          <CardContent className="overflow-x-auto">
+            <Table className="min-w-[900px]">
+              <TableHeader><TableRow><TableHead></TableHead><TableHead>Categoria</TableHead><TableHead>Descrição</TableHead><TableHead>Parcelas</TableHead><TableHead>Valor total</TableHead><TableHead>Aberto</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {grupos.map((grupo) => (
+                  <FragmentGroup key={grupo.id} grupo={grupo} expanded={Boolean(expanded[grupo.id])} onToggle={() => setExpanded((current) => ({ ...current, [grupo.id]: !current[grupo.id] }))} onPay={onPay} />
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function FragmentGroup({ grupo, expanded, onToggle, onPay }: { grupo: DespesaGrupo; expanded: boolean; onToggle: () => void; onPay: (id: number) => void }) {
+  return (
+    <>
+      <TableRow>
+        <TableCell><Button size="icon" variant="ghost" onClick={onToggle}>{expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</Button></TableCell>
+        <TableCell>{grupo.categoria}</TableCell>
+        <TableCell>{grupo.descricao}</TableCell>
+        <TableCell>{grupo.parcelas.length} parcela(s)</TableCell>
+        <TableCell>{formatCurrency(grupo.valorTotal)}</TableCell>
+        <TableCell>{formatCurrency(grupo.valorAberto)}</TableCell>
+        <TableCell><Badge tone={grupo.valorAberto > 0 ? "info" : "success"}>{grupo.valorAberto > 0 ? "Em aberto" : "Pago"}</Badge></TableCell>
+      </TableRow>
+      {expanded && grupo.parcelas.map((parcela) => {
+        const venceHoje = parcela.vencimento === new Date().toISOString().slice(0, 10) && parcela.status !== "PAGO";
+        return <TableRow key={parcela.id} className={cn(venceHoje && "bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-200")}><TableCell></TableCell><TableCell>Parcela {parcela.numeroParcela}/{parcela.totalParcelas}</TableCell><TableCell>{formatDate(parcela.vencimento)}</TableCell><TableCell>{formatCurrency(parcela.valor)}</TableCell><TableCell>{parcela.status === "PAGO" ? "Pago" : "Aberto"}</TableCell><TableCell>{parcela.dataPagamento ? formatDate(parcela.dataPagamento) : "-"}</TableCell><TableCell>{parcela.status !== "PAGO" && <Button size="sm" variant="outline" onClick={() => onPay(parcela.id)}>Pagar</Button>}</TableCell></TableRow>;
+      })}
     </>
   );
 }
 
-function Entradas({ pedidos }: { pedidos: PedidoResumo[] }) {
-  const total = pedidos.reduce((sum, pedido) => sum + pedido.valorPago, 0);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Entradas de dinheiro</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-3">
-        <Metric title="Entradas registradas" value={formatCurrency(total)} tone="cyan" />
-        <Metric title="Pedidos com entrada" value={String(pedidos.filter((pedido) => pedido.valorPago > 0).length)} tone="green" />
-        <Metric title="Saldo a receber" value={formatCurrency(pedidos.reduce((sum, pedido) => sum + pedido.saldoDevedor, 0))} tone="amber" />
-      </CardContent>
-    </Card>
-  );
+function Graficos({ data }: { data: GraficosFinanceiro }) {
+  return <div className="space-y-6"><div className="grid gap-6 xl:grid-cols-2"><BarCard title="Receita anual" data={data.receitaAnual} labelKey="mes" /><BarCard title="Despesas anual" data={data.despesaAnual} labelKey="mes" /></div><div className="grid gap-6 xl:grid-cols-2"><BarCard title="Despesas do mês" data={data.despesasMes} labelKey="categoria" /><Clientes data={data} /></div></div>;
 }
 
-function Despesas({ despesas }: { despesas: Despesa[] }) {
-  return (
-    <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-      <Card>
-        <CardHeader>
-          <CardTitle>Nova despesa</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Input placeholder="Categoria: luz, água, contador..." />
-          <Input placeholder="Descrição" />
-          <Input placeholder="Valor" />
-          <Input type="date" placeholder="Vencimento" />
-          <Button>
-            <Plus size={16} />
-            Lançar
-          </Button>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Contas e despesas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Valor</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {despesas.map((despesa, index) => (
-                <TableRow key={`${despesa.id ?? index}-${despesa.categoria ?? despesa.tipo}`}>
-                  <TableCell>{despesa.categoria ?? despesa.tipo ?? despesa.descricao}</TableCell>
-                  <TableCell>{typeof despesa.valor === "number" ? formatCurrency(despesa.valor) : despesa.valor}</TableCell>
-                  <TableCell>
-                    <Badge tone={despesa.status === "Pago" || despesa.status === "Finalizado" ? "success" : "info"}>{despesa.status}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
+function Clientes({ data }: { data: GraficosFinanceiro }) {
+  const total = data.clientesMes.reduce((sum, item) => sum + item.valor, 0);
+  return <Card><CardHeader><CardTitle>Top clientes do mês</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Valor</TableHead><TableHead>%</TableHead></TableRow></TableHeader><TableBody>{data.clientesMes.map((item) => <TableRow key={item.cliente}><TableCell>{item.cliente}</TableCell><TableCell>{formatCurrency(item.valor)}</TableCell><TableCell>{total > 0 ? Math.round((item.valor / total) * 100) : 0}%</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>;
 }
 
-function Graficos({ pedidos }: { pedidos: PedidoResumo[] }) {
-  const bars = pedidos.slice(0, 7).map((pedido) => {
-    const height = Math.max(12, Math.min(40, Math.round(pedido.valorPago / 100)));
-    return `h-${height} bg-primary`;
-  });
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        <BarCard title="Entradas x saídas" bars={bars.length ? bars : ["h-12 bg-primary"]} />
-        <BarCard title="Receita anual" bars={bars.length ? bars : ["h-12 bg-primary"]} />
-      </div>
-      <Clientes pedidos={pedidos} />
-    </div>
-  );
+function BarCard({ title, data, labelKey }: { title: string; data: { mes?: number; valor: number; categoria?: string }[]; labelKey: "mes" | "categoria" }) {
+  const max = Math.max(...data.map((item) => item.valor), 1);
+  return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent className="space-y-3">{data.length === 0 && <p className="text-sm text-muted-foreground">Sem dados para exibir.</p>}{data.map((item, index) => { const pct = Math.max(4, (item.valor / max) * 100); return <div key={`${title}-${index}`} className="space-y-1"><div className="flex justify-between text-xs font-bold"><span>{labelKey === "mes" ? meses[(item.mes ?? 1) - 1]?.[1] : item.categoria}</span><span>{formatCurrency(item.valor)}</span></div><div className="h-3 rounded-full bg-muted"><div className="h-3 rounded-full bg-primary" style={{ width: `${pct}%` }} /></div></div>; })}</CardContent></Card>;
 }
 
-function Clientes({ pedidos }: { pedidos: PedidoResumo[] }) {
-  const clientes = useMemo(() => {
-    const totals = new Map<string, number>();
-    pedidos.forEach((pedido) => totals.set(pedido.cliente, (totals.get(pedido.cliente) ?? 0) + pedido.total));
-    const totalGeral = Array.from(totals.values()).reduce((sum, value) => sum + value, 0);
-    return Array.from(totals.entries())
-      .map(([cliente, valor]) => ({ cliente, valor, percentual: totalGeral > 0 ? Math.round((valor / totalGeral) * 100) : 0 }))
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 10);
-  }, [pedidos]);
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label><span className="field-label">{label}</span><div className="mt-2">{children}</div></label>; }
+function Select({ value, onChange, children, disabled = false }: { value: string; onChange: (value: string) => void; children: React.ReactNode; disabled?: boolean }) { return <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</select>; }
+function Metric({ title, value, tone }: { title: string; value: string; tone: "green" | "cyan" | "amber" | "rose" }) { const colors = { green: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300", cyan: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300", amber: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300", rose: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" }; return <Card className={colors[tone]}><CardContent className="p-5"><p className="text-sm font-semibold opacity-80">{title}</p><p className="mt-2 text-2xl font-black">{value}</p></CardContent></Card>; }
+function formatStatus(value: string) { return { ABERTO: "Aberto", FINALIZADO: "Finalizado", CANCELADO: "Cancelado", ORCADO: "Orçado" }[value] ?? value; }
+function statusTone(value: string) { if (value === "FINALIZADO") return "success"; if (value === "CANCELADO") return "danger"; return "info"; }
+function formatForma(value: string) { return { DINHEIRO: "Dinheiro", PIX: "PIX", CARTAO_CREDITO: "Cartão crédito", CARTAO_DEBITO: "Cartão débito" }[value] ?? value; }
+function formatDateTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date); }
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Top 10 clientes do mês</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Valor</TableHead>
-              <TableHead>%</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {clientes.map((cliente) => (
-              <TableRow key={cliente.cliente}>
-                <TableCell>{cliente.cliente}</TableCell>
-                <TableCell>{formatCurrency(cliente.valor)}</TableCell>
-                <TableCell>{cliente.percentual}%</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Metric({ title, value, tone }: { title: string; value: string; tone: "green" | "cyan" | "amber" }) {
-  const colors = {
-    green: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-    cyan: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300",
-    amber: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-  };
-  return (
-    <Card className={colors[tone]}>
-      <CardContent className="p-5">
-        <p className="text-sm font-semibold opacity-80">{title}</p>
-        <p className="mt-2 text-3xl font-black">{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function BarCard({ title, bars }: { title: string; bars: string[] }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex h-48 items-end gap-4">
-        {bars.map((bar, index) => (
-          <div key={`${bar}-${index}`} className={`w-8 rounded-t-md ${bar}`} />
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
+type DespesaGrupo = { id: string; categoria: string; descricao: string; valorTotal: number; valorAberto: number; parcelas: Despesa[] };
+function agruparDespesas(despesas: Despesa[]): DespesaGrupo[] { const map = new Map<string, DespesaGrupo>(); despesas.forEach((despesa) => { const id = despesa.grupoDespesaId || String(despesa.id); const grupo = map.get(id) ?? { id, categoria: despesa.categoria, descricao: despesa.descricao, valorTotal: despesa.valorTotal || despesa.valor, valorAberto: 0, parcelas: [] }; grupo.parcelas.push(despesa); grupo.valorAberto = grupo.parcelas.filter((item) => item.status !== "PAGO").reduce((sum, item) => sum + item.valor, 0); map.set(id, grupo); }); return Array.from(map.values()); }
+function buildParcelasPreview(total: number, vencimento: string, quantidade: number) { if (total <= 0 || !vencimento) return []; const qtd = Math.max(1, quantidade); const parcela = Math.round((total / qtd) * 100) / 100; let restante = total; return Array.from({ length: qtd }, (_, index) => { const valor = index === qtd - 1 ? restante : parcela; restante -= valor; return { numero: index + 1, valor, vencimento: addMonths(vencimento, index) }; }); }
+function addMonths(value: string, months: number) { const date = new Date(`${value}T00:00:00`); date.setMonth(date.getMonth() + months); return date.toISOString().slice(0, 10); }
