@@ -61,8 +61,10 @@ export type MovimentacaoPayload = {
   observacao: string | null;
 };
 
-export function listarProdutosEstoque() {
-  return apiRequest<ProdutoEstoque[]>("/estoque/produtos");
+export type ResultadoPaginado<T> = { itens: T[]; total: number; pagina: number; tamanhoPagina: number; totalPaginas: number };
+
+export function listarProdutosEstoque(pagina = 1, tamanhoPagina = 10) {
+  return apiRequest<ResultadoPaginado<ProdutoEstoque>>(`/estoque/produtos?pagina=${pagina}&tamanhoPagina=${tamanhoPagina}`);
 }
 
 export function listarCategoriasEstoque() {
@@ -76,8 +78,8 @@ export function criarCategoriaEstoque(nome: string) {
   });
 }
 
-export function listarMovimentacoesEstoque() {
-  return apiRequest<MovimentacaoEstoque[]>("/estoque/movimentacoes");
+export function listarMovimentacoesEstoque(pagina = 1, tamanhoPagina = 10) {
+  return apiRequest<ResultadoPaginado<MovimentacaoEstoque>>(`/estoque/movimentacoes?pagina=${pagina}&tamanhoPagina=${tamanhoPagina}`);
 }
 
 export function criarProdutoEstoque(payload: ProdutoPayload) {

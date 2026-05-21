@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+﻿import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,8 +55,14 @@ const emptyProduto: ProdutoForm = {
 export function EstoquePage({ usuarioId }: { usuarioId: number }) {
   const [tab, setTab] = useState("Produtos");
   const [produtos, setProdutos] = useState<ProdutoEstoque[]>([]);
+  const [paginaProdutos, setPaginaProdutos] = useState(1);
+  const [totalProdutos, setTotalProdutos] = useState(0);
+  const [totalPaginasProdutos, setTotalPaginasProdutos] = useState(1);
   const [categorias, setCategorias] = useState<CategoriaEstoque[]>([]);
   const [movimentacoes, setMovimentacoes] = useState<MovimentacaoEstoque[]>([]);
+  const [paginaMovimentacoes, setPaginaMovimentacoes] = useState(1);
+  const [totalMovimentacoes, setTotalMovimentacoes] = useState(0);
+  const [totalPaginasMovimentacoes, setTotalPaginasMovimentacoes] = useState(1);
   const [produtoSelecionado, setProdutoSelecionado] = useState<ProdutoEstoque | null>(null);
   const [produtoForm, setProdutoForm] = useState<ProdutoForm>(emptyProduto);
   const [produtoModalOpen, setProdutoModalOpen] = useState(false);
@@ -73,16 +79,22 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
 
   useEffect(() => {
     carregarDados();
-  }, []);
+  }, [paginaProdutos, paginaMovimentacoes]);
 
   async function carregarDados() {
     const [produtosResponse, movimentacoesResponse, categoriasResponse] = await Promise.all([
-      listarProdutosEstoque().catch(() => []),
-      listarMovimentacoesEstoque().catch(() => []),
+      listarProdutosEstoque(paginaProdutos, 10).catch(() => ({ itens: [], total: 0, pagina: 1, tamanhoPagina: 10, totalPaginas: 1 })),
+      listarMovimentacoesEstoque(paginaMovimentacoes, 10).catch(() => ({ itens: [], total: 0, pagina: 1, tamanhoPagina: 10, totalPaginas: 1 })),
       listarCategoriasEstoque().catch(() => [])
     ]);
-    setProdutos(produtosResponse);
-    setMovimentacoes(movimentacoesResponse);
+    setProdutos(produtosResponse.itens);
+    setTotalProdutos(produtosResponse.total);
+    setPaginaProdutos(produtosResponse.pagina);
+    setTotalPaginasProdutos(produtosResponse.totalPaginas);
+    setMovimentacoes(movimentacoesResponse.itens);
+    setTotalMovimentacoes(movimentacoesResponse.total);
+    setPaginaMovimentacoes(movimentacoesResponse.pagina);
+    setTotalPaginasMovimentacoes(movimentacoesResponse.totalPaginas);
     setCategorias(categoriasResponse);
   }
 
@@ -112,7 +124,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
       observacao: ""
     });
     setStatusMensagem(null);
-    setTab("Movimentação");
+    setTab("MovimentaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o");
   }
 
   async function salvarProduto() {
@@ -143,7 +155,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
       setProdutoForm(emptyProduto);
       setProdutoModalOpen(false);
     } catch {
-      setStatusMensagem("Não foi possível salvar o produto. Confira os campos e tente novamente.");
+      setStatusMensagem("NÃƒÆ’Ã‚Â£o foi possÃƒÆ’Ã‚Â­vel salvar o produto. Confira os campos e tente novamente.");
     } finally {
       setIsSaving(false);
     }
@@ -165,7 +177,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
       setProdutoForm((current) => ({ ...current, categoria: nome }));
       setStatusMensagem("Categoria cadastrada com sucesso.");
     } catch {
-      setStatusMensagem("Não foi possível cadastrar a categoria.");
+      setStatusMensagem("NÃƒÆ’Ã‚Â£o foi possÃƒÆ’Ã‚Â­vel cadastrar a categoria.");
     } finally {
       setIsSaving(false);
     }
@@ -185,11 +197,11 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
         custoUnitario: movForm.tipo === "ENTRADA" ? parseCurrency(movForm.custoUnitario) : null,
         observacao: movForm.observacao.trim() || null
       });
-      setStatusMensagem("Movimentação registrada com sucesso.");
+      setStatusMensagem("MovimentaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o registrada com sucesso.");
       setMovForm({ produtoId: "", tipo: "ENTRADA", quantidade: "", custoUnitario: formatCurrency(0), pedidoId: "", observacao: "" });
       await carregarDados();
     } catch {
-      setStatusMensagem("Não foi possível registrar a movimentação. Confira o produto e a quantidade.");
+      setStatusMensagem("NÃƒÆ’Ã‚Â£o foi possÃƒÆ’Ã‚Â­vel registrar a movimentaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o. Confira o produto e a quantidade.");
     } finally {
       setIsSaving(false);
     }
@@ -200,7 +212,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black">Controle de estoque</h1>
-          <p className="text-sm text-muted-foreground">Produtos, materiais, movimentações e alertas</p>
+          <p className="text-sm text-muted-foreground">Produtos, materiais, movimentaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes e alertas</p>
         </div>
         <Button onClick={novoProduto}>
           <Plus size={16} />
@@ -208,7 +220,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
         </Button>
       </div>
 
-      <Tabs tabs={["Produtos", "Movimentação"]} active={tab} onChange={setTab} />
+      <Tabs tabs={["Produtos", "MovimentaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o"]} active={tab} onChange={setTab} />
 
       {statusMensagem && (
         <p className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">
@@ -225,9 +237,13 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
           saidasMes={saidasMes}
           onEdit={editarProduto}
           onMove={movimentarProduto}
+          total={totalProdutos}
+          pagina={paginaProdutos}
+          totalPaginas={totalPaginasProdutos}
+          onPageChange={setPaginaProdutos}
         />
       )}
-      {tab === "Movimentação" && (
+      {tab === "MovimentaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o" && (
         <Movimentacao
           produtos={produtos}
           movimentacoes={movimentacoes}
@@ -235,6 +251,10 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
           setMovForm={setMovForm}
           onRegister={registrarMovimentacao}
           isSaving={isSaving}
+          total={totalMovimentacoes}
+          pagina={paginaMovimentacoes}
+          totalPaginas={totalPaginasMovimentacoes}
+          onPageChange={setPaginaMovimentacoes}
         />
       )}
 
@@ -286,7 +306,11 @@ function Produtos({
   entradasMes,
   saidasMes,
   onEdit,
-  onMove
+  onMove,
+  total,
+  pagina,
+  totalPaginas,
+  onPageChange
 }: {
   produtos: ProdutoEstoque[];
   baixoEstoque: number;
@@ -295,15 +319,19 @@ function Produtos({
   saidasMes: number;
   onEdit: (produto: ProdutoEstoque) => void;
   onMove: (produto: ProdutoEstoque) => void;
+  total: number;
+  pagina: number;
+  totalPaginas: number;
+  onPageChange: (pagina: number) => void;
 }) {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-5">
-        <Metric title="Total produtos" value={String(produtos.length)} tone="green" />
+        <Metric title="Total produtos" value={String(total)} tone="green" />
         <Metric title="Valor em estoque" value={formatCurrency(valorTotalProdutos)} tone="cyan" />
         <Metric title="Baixo estoque" value={String(baixoEstoque)} tone="rose" />
-        <Metric title="Entradas mês" value={String(entradasMes)} tone="green" />
-        <Metric title="Saídas mês" value={String(saidasMes)} tone="amber" />
+        <Metric title="Entradas mÃƒÆ’Ã‚Âªs" value={String(entradasMes)} tone="green" />
+        <Metric title="SaÃƒÆ’Ã‚Â­das mÃƒÆ’Ã‚Âªs" value={String(saidasMes)} tone="amber" />
       </section>
 
       <Card>
@@ -314,15 +342,15 @@ function Produtos({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Código</TableHead>
+                <TableHead>CÃƒÆ’Ã‚Â³digo</TableHead>
                 <TableHead>Produto</TableHead>
                 <TableHead>Tam.</TableHead>
                 <TableHead>Qtd.</TableHead>
-                <TableHead>Mín.</TableHead>
-                <TableHead>Custo médio</TableHead>
+                <TableHead>MÃƒÆ’Ã‚Â­n.</TableHead>
+                <TableHead>Custo mÃƒÆ’Ã‚Â©dio</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Ação</TableHead>
+                <TableHead>AÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -355,6 +383,13 @@ function Produtos({
               })}
             </TableBody>
           </Table>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">{total} produto{total === 1 ? "" : "s"} encontrado{total === 1 ? "" : "s"}</p>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={pagina <= 1} onClick={() => onPageChange(Math.max(1, pagina - 1))}>Anterior</Button>
+              <Button variant="outline" disabled={pagina >= totalPaginas} onClick={() => onPageChange(pagina + 1)}>Proxima</Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -417,10 +452,10 @@ function ProdutoFormCard({
             </Button>
           </div>
         </label>
-        <Field label="Estoque mínimo" value={form.estoqueMinimo} onChange={(value) => setForm((current) => ({ ...current, estoqueMinimo: value.replace(/\D/g, "") }))} />
+        <Field label="Estoque mÃƒÆ’Ã‚Â­nimo" value={form.estoqueMinimo} onChange={(value) => setForm((current) => ({ ...current, estoqueMinimo: value.replace(/\D/g, "") }))} />
         <Field className="md:col-span-2" label="Fornecedor" value={form.fornecedor} onChange={(value) => setForm((current) => ({ ...current, fornecedor: value }))} />
         <label className="md:col-span-2 space-y-2">
-          <span className="field-label">Observação</span>
+          <span className="field-label">ObservaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o</span>
           <Textarea value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} maxLength={300} />
         </label>
         <div className="flex flex-wrap items-end gap-3 self-end">
@@ -428,7 +463,7 @@ function ProdutoFormCard({
             Cancelar
           </Button>
           <Button onClick={onSave} disabled={isSaving}>
-            {isSaving ? "Salvando..." : produtoSelecionado ? "Salvar alterações" : "Salvar produto"}
+            {isSaving ? "Salvando..." : produtoSelecionado ? "Salvar alteraÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Âµes" : "Salvar produto"}
           </Button>
         </div>
       </CardContent>
@@ -442,7 +477,11 @@ function Movimentacao({
   movForm,
   setMovForm,
   onRegister,
-  isSaving
+  isSaving,
+  total,
+  pagina,
+  totalPaginas,
+  onPageChange
 }: {
   produtos: ProdutoEstoque[];
   movimentacoes: MovimentacaoEstoque[];
@@ -450,6 +489,10 @@ function Movimentacao({
   setMovForm: React.Dispatch<React.SetStateAction<MovimentacaoForm>>;
   onRegister: () => void;
   isSaving: boolean;
+  total: number;
+  pagina: number;
+  totalPaginas: number;
+  onPageChange: (pagina: number) => void;
 }) {
   const podeRegistrar =
     Number(movForm.produtoId) > 0 &&
@@ -460,7 +503,7 @@ function Movimentacao({
     <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
       <Card>
         <CardHeader>
-          <CardTitle>Nova movimentação</CardTitle>
+          <CardTitle>Nova movimentaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <label>
@@ -478,16 +521,16 @@ function Movimentacao({
             <span className="field-label">Tipo</span>
             <Select value={movForm.tipo} onChange={(value) => setMovForm((current) => ({ ...current, tipo: value as "ENTRADA" | "SAIDA" }))}>
               <option value="ENTRADA">Entrada</option>
-              <option value="SAIDA">Saída</option>
+              <option value="SAIDA">SaÃƒÆ’Ã‚Â­da</option>
             </Select>
           </label>
           <Field label="Quantidade" value={movForm.quantidade} onChange={(value) => setMovForm((current) => ({ ...current, quantidade: value.replace(/\D/g, "") }))} />
           {movForm.tipo === "ENTRADA" && (
-            <Field label="Custo unitário" value={movForm.custoUnitario} onChange={(value) => setMovForm((current) => ({ ...current, custoUnitario: maskCurrency(value) }))} />
+            <Field label="Custo unitÃƒÆ’Ã‚Â¡rio" value={movForm.custoUnitario} onChange={(value) => setMovForm((current) => ({ ...current, custoUnitario: maskCurrency(value) }))} />
           )}
           <Field label="Pedido vinculado" value={movForm.pedidoId} onChange={(value) => setMovForm((current) => ({ ...current, pedidoId: value.replace(/\D/g, "") }))} />
           <label className="space-y-2">
-            <span className="field-label">Observação</span>
+            <span className="field-label">ObservaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o</span>
             <Textarea value={movForm.observacao} onChange={(event) => setMovForm((current) => ({ ...current, observacao: event.target.value }))} maxLength={300} />
           </label>
           <Button onClick={onRegister} disabled={isSaving || !podeRegistrar}>
@@ -497,7 +540,7 @@ function Movimentacao({
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Histórico</CardTitle>
+          <CardTitle>HistÃƒÆ’Ã‚Â³rico</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
@@ -519,7 +562,7 @@ function Movimentacao({
                   <TableRow key={`${mov.movimentadoEm ?? mov.data}-${mov.tipo}-${index}`}>
                     <TableCell>{formatDateTime(mov.movimentadoEm ?? mov.data)}</TableCell>
                     <TableCell>
-                      <Badge tone={tipo === "ENTRADA" ? "success" : "danger"}>{tipo === "ENTRADA" ? "Entrada" : "Saída"}</Badge>
+                      <Badge tone={tipo === "ENTRADA" ? "success" : "danger"}>{tipo === "ENTRADA" ? "Entrada" : "SaÃƒÆ’Ã‚Â­da"}</Badge>
                     </TableCell>
                     <TableCell>{mov.produto ?? "-"}</TableCell>
                     <TableCell>{mov.quantidade ?? mov.qtd ?? "-"}</TableCell>
@@ -531,6 +574,13 @@ function Movimentacao({
               })}
             </TableBody>
           </Table>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">{total} movimentacao{total === 1 ? "" : "es"} encontrada{total === 1 ? "" : "s"}</p>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={pagina <= 1} onClick={() => onPageChange(Math.max(1, pagina - 1))}>Anterior</Button>
+              <Button variant="outline" disabled={pagina >= totalPaginas} onClick={() => onPageChange(pagina + 1)}>Proxima</Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -638,3 +688,4 @@ function Metric({ title, value, tone }: { title: string; value: string; tone: "g
     </Card>
   );
 }
+

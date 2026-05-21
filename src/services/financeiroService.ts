@@ -6,6 +6,8 @@ export type FinanceiroFiltros = {
   inicio?: string;
   fim?: string;
   status?: string;
+  pagina?: number;
+  tamanhoPagina?: number;
 };
 
 export type VendaPedido = {
@@ -24,6 +26,8 @@ export type VendaPedido = {
   motivoCancelamento: string | null;
 };
 
+export type ResultadoPaginado<T> = { itens: T[]; total: number; pagina: number; tamanhoPagina: number; totalPaginas: number };
+
 export type VendasFinanceiro = {
   resumo: {
     totalVendas: number;
@@ -35,7 +39,7 @@ export type VendasFinanceiro = {
     pedidosEmAndamento: number;
     valorEntrouHoje: number;
   };
-  pedidos: VendaPedido[];
+  pedidos: ResultadoPaginado<VendaPedido>;
 };
 
 export type EntradaFinanceira = {
@@ -56,7 +60,7 @@ export type EntradasFinanceiro = {
     cartaoDebito: number;
     entrouHoje: number;
   };
-  entradas: EntradaFinanceira[];
+  entradas: ResultadoPaginado<EntradaFinanceira>;
 };
 
 export type Despesa = {
@@ -103,6 +107,14 @@ export type GraficosFinanceiro = {
   clientesMes: GraficoPonto[];
 };
 
+export type DespesaAtualizarPayload = {
+  categoria: string;
+  descricao: string;
+  valor: number;
+  vencimento: string;
+  observacao: string | null;
+};
+
 export type DespesaPayload = {
   usuarioId: number;
   categoria: string;
@@ -121,6 +133,8 @@ function queryString(filtros?: FinanceiroFiltros) {
   if (filtros?.inicio) params.set("inicio", filtros.inicio);
   if (filtros?.fim) params.set("fim", filtros.fim);
   if (filtros?.status) params.set("status", filtros.status);
+  if (filtros?.pagina) params.set("pagina", String(filtros.pagina));
+  if (filtros?.tamanhoPagina) params.set("tamanhoPagina", String(filtros.tamanhoPagina));
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -144,6 +158,13 @@ export function obterGraficosFinanceiro(filtros?: FinanceiroFiltros) {
 export function criarDespesa(payload: DespesaPayload) {
   return apiRequest<{ id: number }>("/financeiro/despesas", {
     method: "POST",
+    body: payload
+  });
+}
+
+export function atualizarDespesa(grupoDespesaId: string, payload: DespesaAtualizarPayload) {
+  return apiRequest<void>(`/financeiro/despesas/${grupoDespesaId}`, {
+    method: "PUT",
     body: payload
   });
 }

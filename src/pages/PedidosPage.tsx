@@ -1,4 +1,4 @@
-import { Eye, Filter, Plus } from "lucide-react";
+﻿import { Eye, Filter, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Page } from "@/components/AppLayout";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,8 @@ const meses = [
   ["12", "Dezembro"]
 ];
 
+const tamanhoPagina = 10;
+
 export function PedidosPage({ setPage }: { setPage: Navigate }) {
   const [pedidos, setPedidos] = useState<PedidoResumo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -37,26 +39,32 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFinal, setDataFinal] = useState("");
   const [status, setStatus] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(1);
 
-  function carregarPedidos() {
+  function carregarPedidos(paginaDesejada = pagina) {
     setIsLoading(true);
     setError(null);
-    listarPedidos({ ano, mes, inicio: dataInicio, fim: dataFinal, status })
-      .then(setPedidos)
+    listarPedidos({ ano, mes, inicio: dataInicio, fim: dataFinal, status, pagina: paginaDesejada, tamanhoPagina })
+      .then((resultado) => {
+        setPedidos(resultado.itens);
+        setTotal(resultado.total);
+        setPagina(resultado.pagina);
+        setTotalPaginas(resultado.totalPaginas);
+      })
       .catch(() => setError("Nao foi possivel carregar os pedidos."))
       .finally(() => setIsLoading(false));
   }
 
   useEffect(() => {
-    carregarPedidos();
+    carregarPedidos(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const pedidosFiltrados = pedidos;
-
   const totaisStatus = useMemo(
     () =>
-      pedidosFiltrados.reduce(
+      pedidos.reduce(
         (acc, pedido) => {
           const pedidoStatus = formatStatusPedido(pedido.status);
           const tipo = formatTipoPedido(pedido.tipo);
@@ -68,7 +76,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
         },
         { abertos: 0, orcamentos: 0, cancelados: 0, finalizados: 0 }
       ),
-    [pedidosFiltrados]
+    [pedidos]
   );
 
   function limparPeriodo() {
@@ -76,22 +84,31 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
     setDataFinal("");
   }
 
+  function aplicarFiltro() {
+    carregarPedidos(1);
+  }
+
+  function mudarPagina(proximaPagina: number) {
+    if (proximaPagina < 1 || proximaPagina > totalPaginas || proximaPagina === pagina) return;
+    carregarPedidos(proximaPagina);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black">Pedidos e or&ccedil;amentos</h1>
-          <p className="text-sm text-muted-foreground">Abertos, cancelados, finalizados e or&ccedil;ados</p>
+          <h1 className="text-3xl font-black">{"Pedidos e or\u00e7amentos"}</h1>
+          <p className="text-sm text-muted-foreground">{"Abertos, cancelados, finalizados e or\u00e7ados"}</p>
         </div>
         <Button onClick={() => setPage("novo-pedido")}>
           <Plus size={16} />
-          Novo Pedido/Or&ccedil;amento
+          {"Novo Pedido/Or\u00e7amento"}
         </Button>
       </div>
 
       <section className="grid gap-4 md:grid-cols-4">
         <Metric title="Abertos" value={String(totaisStatus.abertos)} tone="cyan" />
-        <Metric title="Or\u00e7amentos" value={String(totaisStatus.orcamentos)} tone="amber" />
+        <Metric title={"Or\u00e7amentos"} value={String(totaisStatus.orcamentos)} tone="amber" />
         <Metric title="Cancelados" value={String(totaisStatus.cancelados)} tone="rose" />
         <Metric title="Finalizados" value={String(totaisStatus.finalizados)} tone="emerald" />
       </section>
@@ -103,7 +120,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
             <Input className="mt-2" value={ano} onChange={(event) => setAno(event.target.value)} disabled={Boolean(dataInicio || dataFinal)} />
           </label>
           <label>
-            <span className="field-label">M&ecirc;s</span>
+            <span className="field-label">{"M\u00eas"}</span>
             <Select value={mes} onChange={setMes} disabled={Boolean(dataInicio || dataFinal)}>
               {meses.map(([value, label]) => (
                 <option key={value} value={value}>
@@ -113,7 +130,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
             </Select>
           </label>
           <label>
-            <span className="field-label">Data inÃƒÆ’Ã‚Â­cio</span>
+            <span className="field-label">{"Data in\u00edcio"}</span>
             <Input className="mt-2" type="date" value={dataInicio} onChange={(event) => setDataInicio(event.target.value)} onFocus={limparPeriodo} />
           </label>
           <label>
@@ -124,13 +141,13 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
             <span className="field-label">Status</span>
             <Select value={status} onChange={setStatus}>
               <option value="">Todos</option>
-              <option value="OrÃƒÆ’Ã‚Â§ado">OrÃƒÆ’Ã‚Â§ado</option>
+              <option value="Orcado">{"Or\u00e7ado"}</option>
               <option value="Aberto">Aberto</option>
               <option value="Finalizado">Finalizado</option>
               <option value="Cancelado">Cancelado</option>
             </Select>
           </label>
-          <Button className="mt-6" variant="outline" onClick={carregarPedidos}>
+          <Button className="mt-6" variant="outline" onClick={aplicarFiltro}>
             <Filter size={16} />
             Filtrar
           </Button>
@@ -138,8 +155,16 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Lista de pedidos</CardTitle>
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Lista de pedidos</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {total} registro{total === 1 ? "" : "s"} encontrado{total === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div className="text-sm font-semibold text-muted-foreground">
+            Pagina {pagina} de {totalPaginas}
+          </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
@@ -152,9 +177,9 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                 <TableHead>Total</TableHead>
                 <TableHead>Pago</TableHead>
                 <TableHead>Saldo</TableHead>
-                <TableHead>Devolu&ccedil;&atilde;o</TableHead>
+                <TableHead>{"Devolu\u00e7\u00e3o"}</TableHead>
                 <TableHead>Motivo cancelamento</TableHead>
-                <TableHead>A&ccedil;&atilde;o</TableHead>
+                <TableHead>{"A\u00e7\u00e3o"}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -172,9 +197,15 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                 </TableRow>
               )}
 
+              {!isLoading && !error && pedidos.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={10}>Nenhum pedido encontrado para os filtros informados.</TableCell>
+                </TableRow>
+              )}
+
               {!isLoading &&
                 !error &&
-                pedidosFiltrados.map((pedido) => {
+                pedidos.map((pedido) => {
                   const tipo = formatTipoPedido(pedido.tipo);
                   const pedidoStatus = formatStatusPedido(pedido.status);
                   const saldoTabela = pedidoStatus === "Cancelado" ? Math.max(pedido.valorPago - (pedido.valorEstornado ?? 0), 0) : pedido.saldoDevedor;
@@ -210,6 +241,20 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                 })}
             </TableBody>
           </Table>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              Exibindo ate {Math.min(pagina * tamanhoPagina, total)} de {total} registros
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" disabled={isLoading || pagina <= 1} onClick={() => mudarPagina(pagina - 1)}>
+                Anterior
+              </Button>
+              <Button variant="outline" disabled={isLoading || pagina >= totalPaginas} onClick={() => mudarPagina(pagina + 1)}>
+                Proxima
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

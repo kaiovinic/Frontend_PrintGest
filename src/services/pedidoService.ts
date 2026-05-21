@@ -110,6 +110,16 @@ export type PedidoFiltro = {
   inicio?: string;
   fim?: string;
   status?: string;
+  pagina?: number;
+  tamanhoPagina?: number;
+};
+
+export type ResultadoPaginado<T> = {
+  itens: T[];
+  total: number;
+  pagina: number;
+  tamanhoPagina: number;
+  totalPaginas: number;
 };
 
 export function listarPedidos(filtros: PedidoFiltro = {}) {
@@ -122,9 +132,11 @@ export function listarPedidos(filtros: PedidoFiltro = {}) {
     if (filtros.mes) params.set("mes", String(Number(filtros.mes)));
   }
   if (filtros.status) params.set("status", filtros.status);
+  params.set("pagina", String(filtros.pagina ?? 1));
+  params.set("tamanhoPagina", String(filtros.tamanhoPagina ?? 10));
 
   const query = params.toString();
-  return apiRequest<PedidoResumo[]>(`/pedidos${query ? `?${query}` : ""}`);
+  return apiRequest<ResultadoPaginado<PedidoResumo>>(`/pedidos${query ? `?${query}` : ""}`);
 }
 
 export function obterPedido(id: number) {

@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
+  atualizarDespesa,
   criarDespesa,
   obterDespesasFinanceiro,
   obterEntradasFinanceiro,
@@ -67,12 +68,12 @@ const emptyVendas: VendasFinanceiro = {
     pedidosEmAndamento: 0,
     valorEntrouHoje: 0
   },
-  pedidos: []
+  pedidos: { itens: [], total: 0, pagina: 1, tamanhoPagina: 10, totalPaginas: 1 }
 };
 
 const emptyEntradas: EntradasFinanceiro = {
   resumo: { total: 0, dinheiro: 0, pix: 0, cartaoCredito: 0, cartaoDebito: 0, entrouHoje: 0 },
-  entradas: []
+  entradas: { itens: [], total: 0, pagina: 1, tamanhoPagina: 10, totalPaginas: 1 }
 };
 
 const emptyDespesas: DespesasFinanceiro = {
@@ -113,6 +114,9 @@ export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
   const [despesas, setDespesas] = useState<DespesasFinanceiro>(emptyDespesas);
   const [graficos, setGraficos] = useState<GraficosFinanceiro>(emptyGraficos);
   const [form, setForm] = useState<DespesaForm>(emptyForm);
+  const [grupoEditando, setGrupoEditando] = useState<DespesaGrupo | null>(null);
+  const [paginaVendas, setPaginaVendas] = useState(1);
+  const [paginaEntradas, setPaginaEntradas] = useState(1);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -125,13 +129,18 @@ export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
   }, [ano, dataFinal, dataInicio, mes, status]);
 
   useEffect(() => {
+    setPaginaVendas(1);
+    setPaginaEntradas(1);
+  }, [ano, dataFinal, dataInicio, mes, status]);
+
+  useEffect(() => {
     carregarDados();
-  }, [filtros]);
+  }, [filtros, paginaVendas, paginaEntradas]);
 
   async function carregarDados() {
     const [vendasResponse, entradasResponse, despesasResponse, graficosResponse] = await Promise.all([
-      obterVendasFinanceiro(filtros).catch(() => emptyVendas),
-      obterEntradasFinanceiro(filtros).catch(() => emptyEntradas),
+      obterVendasFinanceiro({ ...filtros, pagina: paginaVendas, tamanhoPagina: 10 }).catch(() => emptyVendas),
+      obterEntradasFinanceiro({ ...filtros, pagina: paginaEntradas, tamanhoPagina: 10 }).catch(() => emptyEntradas),
       obterDespesasFinanceiro(filtros).catch(() => emptyDespesas),
       obterGraficosFinanceiro({ ano, mes }).catch(() => emptyGraficos)
     ]);
@@ -160,6 +169,21 @@ export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
     setMensagem(null);
     setIsSaving(true);
     try {
+      if (grupoEditando) {
+        await atualizarDespesa(grupoEditando.id, {
+          categoria,
+          descricao: form.descricao.trim(),
+          valor,
+          vencimento: form.vencimento,
+          observacao: form.observacao.trim() || null
+        });
+        setGrupoEditando(null);
+        setForm(emptyForm);
+        setMensagem("Despesa atualizada com sucesso.");
+        await carregarDados();
+        return;
+      }
+
       await criarDespesa({
         usuarioId,
         categoria,
@@ -198,9 +222,9 @@ export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
 
       {mensagem && <p className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">{mensagem}</p>}
 
-      {tab === "Vendas" && <Vendas data={vendas} />}
-      {tab === "Entradas" && <Entradas data={entradas} />}
-      {tab === "Despesas" && <Despesas data={despesas} form={form} setForm={setForm} expanded={expanded} setExpanded={setExpanded} onSave={salvarDespesa} onPay={marcarPaga} isSaving={isSaving} />}
+      {tab === "Vendas" && <Vendas data={vendas} onPageChange={setPaginaVendas} />}
+      {tab === "Entradas" && <Entradas data={entradas} onPageChange={setPaginaEntradas} />}
+      {tab === "Despesas" && <Despesas data={despesas} form={form} setForm={setForm} expanded={expanded} setExpanded={setExpanded} grupoEditando={grupoEditando} setGrupoEditando={setGrupoEditando} onSave={salvarDespesa} onPay={marcarPaga} isSaving={isSaving} />}
       {tab === "Gráficos" && <Graficos data={graficos} />}
       {tab === "Clientes" && <Clientes data={graficos} />}
     </div>
@@ -246,7 +270,7 @@ function FiltroFinanceiro({ ano, mes, dataInicio, dataFinal, status, setAno, set
   );
 }
 
-function Vendas({ data }: { data: VendasFinanceiro }) {
+function Vendas({ data, onPageChange }: { data: VendasFinanceiro; onPageChange: (pagina: number) => void }) {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -269,7 +293,7 @@ function Vendas({ data }: { data: VendasFinanceiro }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.pedidos.map((pedido) => (
+              {data.pedidos.itens.map((pedido) => (
                 <TableRow key={pedido.id}>
                   <TableCell>{pedido.numero}</TableCell>
                   <TableCell>{pedido.cliente}</TableCell>
@@ -285,13 +309,14 @@ function Vendas({ data }: { data: VendasFinanceiro }) {
               ))}
             </TableBody>
           </Table>
+          <Paginacao total={data.pedidos.total} pagina={data.pedidos.pagina} totalPaginas={data.pedidos.totalPaginas} onPageChange={onPageChange} label="pedido" />
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function Entradas({ data }: { data: EntradasFinanceiro }) {
+function Entradas({ data, onPageChange }: { data: EntradasFinanceiro; onPageChange: (pagina: number) => void }) {
   return (
     <div className="space-y-6">
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -306,17 +331,38 @@ function Entradas({ data }: { data: EntradasFinanceiro }) {
         <CardContent className="overflow-x-auto">
           <Table className="min-w-[900px]">
             <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Forma</TableHead><TableHead>Origem</TableHead><TableHead>Descrição</TableHead><TableHead>Usuário</TableHead><TableHead>Valor</TableHead></TableRow></TableHeader>
-            <TableBody>{data.entradas.map((entrada, index) => <TableRow key={`${entrada.data}-${index}`}><TableCell>{formatDateTime(entrada.data)}</TableCell><TableCell>{formatForma(entrada.formaPagamento)}</TableCell><TableCell>{entrada.origem}</TableCell><TableCell>{entrada.descricao}</TableCell><TableCell>{entrada.usuario}</TableCell><TableCell className="font-bold">{formatCurrency(entrada.valor)}</TableCell></TableRow>)}</TableBody>
+            <TableBody>{data.entradas.itens.map((entrada, index) => <TableRow key={`${entrada.data}-${index}`}><TableCell>{formatDateTime(entrada.data)}</TableCell><TableCell>{formatForma(entrada.formaPagamento)}</TableCell><TableCell>{entrada.origem}</TableCell><TableCell>{entrada.descricao}</TableCell><TableCell>{entrada.usuario}</TableCell><TableCell className="font-bold">{formatCurrency(entrada.valor)}</TableCell></TableRow>)}</TableBody>
           </Table>
+          <Paginacao total={data.entradas.total} pagina={data.entradas.pagina} totalPaginas={data.entradas.totalPaginas} onPageChange={onPageChange} label="entrada" />
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function Despesas({ data, form, setForm, expanded, setExpanded, onSave, onPay, isSaving }: { data: DespesasFinanceiro; form: DespesaForm; setForm: React.Dispatch<React.SetStateAction<DespesaForm>>; expanded: Record<string, boolean>; setExpanded: React.Dispatch<React.SetStateAction<Record<string, boolean>>>; onSave: () => void; onPay: (id: number) => void; isSaving: boolean }) {
+function Despesas({ data, form, setForm, expanded, setExpanded, grupoEditando, setGrupoEditando, onSave, onPay, isSaving }: { data: DespesasFinanceiro; form: DespesaForm; setForm: React.Dispatch<React.SetStateAction<DespesaForm>>; expanded: Record<string, boolean>; setExpanded: React.Dispatch<React.SetStateAction<Record<string, boolean>>>; grupoEditando: DespesaGrupo | null; setGrupoEditando: React.Dispatch<React.SetStateAction<DespesaGrupo | null>>; onSave: () => void; onPay: (id: number) => void; isSaving: boolean }) {
   const grupos = useMemo(() => agruparDespesas(data.despesas), [data.despesas]);
   const parcelasPreview = buildParcelasPreview(parseCurrency(form.valor), form.vencimento, form.condicaoPagamento === "PARCELADO" ? Number(form.quantidadeParcelas || 1) : 1);
+
+  function editarGrupo(grupo: DespesaGrupo) {
+    const primeiraParcela = grupo.parcelas[0];
+    setGrupoEditando(grupo);
+    setForm({
+      categoria: grupo.categoria,
+      novaCategoria: "",
+      descricao: grupo.descricao,
+      valor: formatCurrency(grupo.valorTotal),
+      vencimento: primeiraParcela?.vencimento ?? new Date().toISOString().slice(0, 10),
+      condicaoPagamento: grupo.parcelas.length > 1 ? "PARCELADO" : "A_VISTA",
+      quantidadeParcelas: String(grupo.parcelas.length || 1),
+      observacao: primeiraParcela?.observacao ?? ""
+    });
+  }
+
+  function cancelarEdicao() {
+    setGrupoEditando(null);
+    setForm(emptyForm);
+  }
 
   return (
     <div className="space-y-6">
@@ -324,14 +370,15 @@ function Despesas({ data, form, setForm, expanded, setExpanded, onSave, onPay, i
         <Metric title="Despesas cadastradas" value={String(data.resumo.totalDespesas)} tone="cyan" />
         <Metric title="Vencem hoje" value={String(data.resumo.vencimentoHoje)} tone="rose" />
         <Metric title="Valor vence hoje" value={formatCurrency(data.resumo.valorVencimentoHoje)} tone="rose" />
-        <Metric title="Gastos do mês" value={formatCurrency(data.resumo.totalMes)} tone="amber" />
-        <Metric title="Não pagas" value={formatCurrency(data.resumo.totalNaoPagoMes)} tone="rose" />
-        <Metric title="Pago no mês" value={formatCurrency(data.resumo.totalPagoMes)} tone="green" />
+        <Metric title="Gastos do m??s" value={formatCurrency(data.resumo.totalMes)} tone="amber" />
+        <Metric title="N??o pagas" value={formatCurrency(data.resumo.totalNaoPagoMes)} tone="rose" />
+        <Metric title="Pago no m??s" value={formatCurrency(data.resumo.totalPagoMes)} tone="green" />
       </section>
       <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
         <Card>
-          <CardHeader><CardTitle>Nova despesa</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{grupoEditando ? "Editar despesa" : "Nova despesa"}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
+            {grupoEditando && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">Editando despesa {grupoEditando.descricao}. As parcelas do grupo serao recalculadas.</p>}
             <Field label="Categoria">
               <Select value={form.categoria} onChange={(value) => setForm((current) => ({ ...current, categoria: value }))}>
                 <option value="">Selecione</option>
@@ -340,24 +387,27 @@ function Despesas({ data, form, setForm, expanded, setExpanded, onSave, onPay, i
               </Select>
             </Field>
             {form.categoria === "__nova" && <Field label="Nova categoria"><Input value={form.novaCategoria} onChange={(event) => setForm((current) => ({ ...current, novaCategoria: event.target.value }))} /></Field>}
-            <Field label="Descrição"><Input value={form.descricao} onChange={(event) => setForm((current) => ({ ...current, descricao: event.target.value }))} /></Field>
+            <Field label="Descri????o"><Input value={form.descricao} onChange={(event) => setForm((current) => ({ ...current, descricao: event.target.value }))} /></Field>
             <Field label="Valor total"><Input value={form.valor} onChange={(event) => setForm((current) => ({ ...current, valor: maskCurrency(event.target.value) }))} /></Field>
             <Field label="Vencimento inicial"><Input type="date" value={form.vencimento} onChange={(event) => setForm((current) => ({ ...current, vencimento: event.target.value }))} /></Field>
-            <Field label="Condição"><Select value={form.condicaoPagamento} onChange={(value) => setForm((current) => ({ ...current, condicaoPagamento: value as DespesaForm["condicaoPagamento"] }))}><option value="A_VISTA">À vista</option><option value="PARCELADO">Parcelado</option></Select></Field>
+            <Field label="Condi????o"><Select value={form.condicaoPagamento} onChange={(value) => setForm((current) => ({ ...current, condicaoPagamento: value as DespesaForm["condicaoPagamento"] }))}><option value="A_VISTA">?? vista</option><option value="PARCELADO">Parcelado</option></Select></Field>
             {form.condicaoPagamento === "PARCELADO" && <Field label="Quantidade de parcelas"><Input value={form.quantidadeParcelas} onChange={(event) => setForm((current) => ({ ...current, quantidadeParcelas: event.target.value.replace(/\D/g, "") }))} /></Field>}
-            <Field label="Observação"><Input value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} /></Field>
-            {parcelasPreview.length > 1 && <div className="rounded-md border p-3 text-sm"><p className="mb-2 font-black">Prévia das parcelas</p>{parcelasPreview.map((parcela) => <p key={parcela.numero}>{parcela.numero}/{parcelasPreview.length} - {formatCurrency(parcela.valor)} - {formatDate(parcela.vencimento)}</p>)}</div>}
-            <Button onClick={onSave} disabled={isSaving}><Plus size={16} />{isSaving ? "Salvando..." : "Cadastrar despesa"}</Button>
+            <Field label="Observa????o"><Input value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} /></Field>
+            {parcelasPreview.length > 1 && <div className="rounded-md border p-3 text-sm"><p className="mb-2 font-black">Pr??via das parcelas</p>{parcelasPreview.map((parcela) => <p key={parcela.numero}>{parcela.numero}/{parcelasPreview.length} - {formatCurrency(parcela.valor)} - {formatDate(parcela.vencimento)}</p>)}</div>}
+            <div className="flex flex-wrap gap-2">
+              {grupoEditando && <Button variant="outline" onClick={cancelarEdicao} disabled={isSaving}>Cancelar edi????o</Button>}
+              <Button onClick={onSave} disabled={isSaving}><Plus size={16} />{isSaving ? "Salvando..." : grupoEditando ? "Salvar altera????es" : "Cadastrar despesa"}</Button>
+            </div>
           </CardContent>
         </Card>
         <Card className="min-w-0">
           <CardHeader><CardTitle>Contas e despesas</CardTitle></CardHeader>
           <CardContent className="overflow-x-auto">
-            <Table className="min-w-[900px]">
-              <TableHeader><TableRow><TableHead></TableHead><TableHead>Categoria</TableHead><TableHead>Descrição</TableHead><TableHead>Parcelas</TableHead><TableHead>Valor total</TableHead><TableHead>Aberto</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+            <Table className="min-w-[980px]">
+              <TableHeader><TableRow><TableHead></TableHead><TableHead>Categoria</TableHead><TableHead>Descri????o</TableHead><TableHead>Parcelas</TableHead><TableHead>Valor total</TableHead><TableHead>Aberto</TableHead><TableHead>Status</TableHead><TableHead>A????o</TableHead></TableRow></TableHeader>
               <TableBody>
                 {grupos.map((grupo) => (
-                  <FragmentGroup key={grupo.id} grupo={grupo} expanded={Boolean(expanded[grupo.id])} onToggle={() => setExpanded((current) => ({ ...current, [grupo.id]: !current[grupo.id] }))} onPay={onPay} />
+                  <FragmentGroup key={grupo.id} grupo={grupo} expanded={Boolean(expanded[grupo.id])} onToggle={() => setExpanded((current) => ({ ...current, [grupo.id]: !current[grupo.id] }))} onEdit={editarGrupo} onPay={onPay} />
                 ))}
               </TableBody>
             </Table>
@@ -368,7 +418,7 @@ function Despesas({ data, form, setForm, expanded, setExpanded, onSave, onPay, i
   );
 }
 
-function FragmentGroup({ grupo, expanded, onToggle, onPay }: { grupo: DespesaGrupo; expanded: boolean; onToggle: () => void; onPay: (id: number) => void }) {
+function FragmentGroup({ grupo, expanded, onToggle, onEdit, onPay }: { grupo: DespesaGrupo; expanded: boolean; onToggle: () => void; onEdit: (grupo: DespesaGrupo) => void; onPay: (id: number) => void }) {
   return (
     <>
       <TableRow>
@@ -379,6 +429,7 @@ function FragmentGroup({ grupo, expanded, onToggle, onPay }: { grupo: DespesaGru
         <TableCell>{formatCurrency(grupo.valorTotal)}</TableCell>
         <TableCell>{formatCurrency(grupo.valorAberto)}</TableCell>
         <TableCell><Badge tone={grupo.valorAberto > 0 ? "info" : "success"}>{grupo.valorAberto > 0 ? "Em aberto" : "Pago"}</Badge></TableCell>
+        <TableCell><Button size="sm" variant="outline" onClick={() => onEdit(grupo)}>Editar</Button></TableCell>
       </TableRow>
       {expanded && grupo.parcelas.map((parcela) => {
         const venceHoje = parcela.vencimento === new Date().toISOString().slice(0, 10) && parcela.status !== "PAGO";
@@ -404,6 +455,17 @@ function BarCard({ title, data, labelKey }: { title: string; data: { mes?: numbe
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label><span className="field-label">{label}</span><div className="mt-2">{children}</div></label>; }
 function Select({ value, onChange, children, disabled = false }: { value: string; onChange: (value: string) => void; children: React.ReactNode; disabled?: boolean }) { return <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</select>; }
+function Paginacao({ total, pagina, totalPaginas, onPageChange, label }: { total: number; pagina: number; totalPaginas: number; onPageChange: (pagina: number) => void; label: string }) {
+  return (
+    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-muted-foreground">{total} {label}{total === 1 ? "" : "s"} encontrado{total === 1 ? "" : "s"}</p>
+      <div className="flex gap-2">
+        <Button variant="outline" disabled={pagina <= 1} onClick={() => onPageChange(Math.max(1, pagina - 1))}>Anterior</Button>
+        <Button variant="outline" disabled={pagina >= totalPaginas} onClick={() => onPageChange(pagina + 1)}>Proxima</Button>
+      </div>
+    </div>
+  );
+}
 function Metric({ title, value, tone }: { title: string; value: string; tone: "green" | "cyan" | "amber" | "rose" }) { const colors = { green: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300", cyan: "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300", amber: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300", rose: "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300" }; return <Card className={colors[tone]}><CardContent className="p-5"><p className="text-sm font-semibold opacity-80">{title}</p><p className="mt-2 text-2xl font-black">{value}</p></CardContent></Card>; }
 function formatStatus(value: string) { return { ABERTO: "Aberto", FINALIZADO: "Finalizado", CANCELADO: "Cancelado", ORCADO: "Orçado" }[value] ?? value; }
 function statusTone(value: string) { if (value === "FINALIZADO") return "success"; if (value === "CANCELADO") return "danger"; return "info"; }

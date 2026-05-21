@@ -34,15 +34,21 @@ export type CaixaMovimentacaoPayload = {
   observacao: string | null;
 };
 
+export type ResultadoPaginado<T> = { itens: T[]; total: number; pagina: number; tamanhoPagina: number; totalPaginas: number };
+
 type CaixaFiltros = {
   inicio?: string;
   fim?: string;
+  pagina?: number;
+  tamanhoPagina?: number;
 };
 
 function queryString(filtros?: CaixaFiltros) {
   const params = new URLSearchParams();
   if (filtros?.inicio) params.set("inicio", filtros.inicio);
   if (filtros?.fim) params.set("fim", filtros.fim);
+  if (filtros?.pagina) params.set("pagina", String(filtros.pagina));
+  if (filtros?.tamanhoPagina) params.set("tamanhoPagina", String(filtros.tamanhoPagina));
   const query = params.toString();
   return query ? `?${query}` : "";
 }
@@ -52,7 +58,7 @@ export function obterResumoCaixa(filtros?: CaixaFiltros) {
 }
 
 export function listarMovimentacoesCaixa(filtros?: CaixaFiltros) {
-  return apiRequest<CaixaMovimentacao[]>(`/caixa/movimentacoes${queryString(filtros)}`);
+  return apiRequest<ResultadoPaginado<CaixaMovimentacao>>(`/caixa/movimentacoes${queryString(filtros)}`);
 }
 
 export function criarMovimentacaoCaixa(payload: CaixaMovimentacaoPayload) {
