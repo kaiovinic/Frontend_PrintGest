@@ -180,14 +180,14 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
         </CardContent>
       </Card>
 
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric title="Entradas" value={formatCurrency(resumo.entradas)} tone="green" />
         <Metric title="Saídas" value={formatCurrency(resumo.saidas)} tone="rose" />
         <Metric title="Saldo caixa" value={formatCurrency(resumo.saldo)} tone="cyan" />
         <Metric title="Dinheiro" value={formatCurrency(resumo.dinheiro)} tone="amber" />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Metric title="PIX" value={formatCurrency(resumo.pix)} tone="green" />
         <Metric title="Cartão crédito" value={formatCurrency(resumo.cartaoCredito)} tone="cyan" />
         <Metric title="Cartão débito" value={formatCurrency(resumo.cartaoDebito)} tone="cyan" />
@@ -199,7 +199,7 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Nova movimentação manual</CardTitle>
@@ -267,12 +267,12 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Movimentações do caixa</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
-            <Table>
+            <Table className="min-w-[920px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Data</TableHead>
@@ -281,20 +281,22 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
                   <TableHead>Categoria</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead>Valor</TableHead>
+                  <TableHead>Usuário</TableHead>
                   <TableHead>Origem</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {movimentacoes.map((mov) => (
                   <TableRow key={mov.id}>
-                    <TableCell>{formatDateTime(mov.movimentadoEm)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDateTime(mov.movimentadoEm)}</TableCell>
                     <TableCell>
                       <Badge tone={mov.tipo === "ENTRADA" ? "success" : "danger"}>{mov.tipo === "ENTRADA" ? "Entrada" : "Saída"}</Badge>
                     </TableCell>
                     <TableCell>{formatFormaPagamento(mov.formaPagamento)}</TableCell>
-                    <TableCell>{mov.categoria}</TableCell>
-                    <TableCell>{mov.descricao}</TableCell>
-                    <TableCell>{formatCurrency(mov.valor)}</TableCell>
+                    <TableCell className="min-w-36 whitespace-normal">{mov.categoria}</TableCell>
+                    <TableCell className="min-w-64 whitespace-normal">{mov.descricao}</TableCell>
+                    <TableCell className="font-bold">{formatCurrency(mov.valor)}</TableCell>
+                    <TableCell className="min-w-32">{mov.usuario || "-"}</TableCell>
                     <TableCell>
                       <Badge tone={mov.origem === "PEDIDO" ? "success" : "warning"}>{mov.origem === "PEDIDO" ? "Pedido" : "Manual"}</Badge>
                     </TableCell>
