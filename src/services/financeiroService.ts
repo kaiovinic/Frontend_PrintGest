@@ -124,6 +124,7 @@ export type DespesaPayload = {
   condicaoPagamento: "A_VISTA" | "PARCELADO";
   quantidadeParcelas: number;
   observacao: string | null;
+  jaPago: boolean;
 };
 
 function queryString(filtros?: FinanceiroFiltros) {

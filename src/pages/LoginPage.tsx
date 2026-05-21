@@ -14,8 +14,8 @@ type LoginPageProps = {
 };
 
 export function LoginPage({ theme, toggleTheme, onLogin }: LoginPageProps) {
-  const [email, setEmail] = useState("maria@print.com");
-  const [senha, setSenha] = useState("123456789");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

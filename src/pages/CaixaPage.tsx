@@ -1,3 +1,4 @@
+import { XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,13 +52,13 @@ const emptyForm: CaixaForm = {
 };
 
 const categoriasPadrao = [
-  "Serviço avulso",
+  "ServiÃ§o avulso",
   "Troco inicial",
   "Ajuste de caixa",
   "Material de limpeza",
   "Compra emergencial",
   "Transporte",
-  "Alimentação",
+  "AlimentaÃ§Ã£o",
   "Sangria de caixa"
 ];
 
@@ -102,6 +103,14 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
     await listarPedidos({ tamanhoPagina: 100 }).then((resultado) => setPedidos(resultado.itens)).catch(() => setPedidos([]));
   }
 
+  function limparFiltros() {
+    const hojeAtual = new Date();
+    const mesAtualFiltro = `${hojeAtual.getFullYear()}-${String(hojeAtual.getMonth() + 1).padStart(2, "0")}`;
+    setInicio(`${mesAtualFiltro}-01`);
+    setFim(`${mesAtualFiltro}-${String(new Date(hojeAtual.getFullYear(), hojeAtual.getMonth() + 1, 0).getDate()).padStart(2, "0")}`);
+    setPaginaMovimentacoes(1);
+  }
+
   async function carregarCaixa() {
     const [resumoResponse, movimentacoesResponse] = await Promise.all([
       obterResumoCaixa(filtros).catch(() => emptyResumo),
@@ -130,7 +139,7 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
         observacao: form.observacao.trim() || null
       });
       setForm(emptyForm);
-      setMensagem("Movimentação de caixa registrada com sucesso.");
+      setMensagem("MovimentaÃ§Ã£o de caixa registrada com sucesso.");
       await carregarCaixa();
       await carregarPedidos();
     } catch {
@@ -165,13 +174,13 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-black">Controle de caixa</h1>
-        <p className="text-sm text-muted-foreground">Entradas de pedidos, recebimentos avulsos e saídas operacionais</p>
+        <p className="text-sm text-muted-foreground">Entradas de pedidos, recebimentos avulsos e saÃ­das operacionais</p>
       </div>
 
       <Card>
-        <CardContent className="grid gap-4 p-5 md:grid-cols-[1fr_1fr_auto]">
+        <CardContent className="grid gap-4 p-5 md:grid-cols-[1fr_1fr_auto_auto]">
           <label>
-            <span className="field-label">Data início</span>
+            <span className="field-label">Data inÃ­cio</span>
             <Input className="mt-2" type="date" value={inicio} onChange={(event) => setInicio(event.target.value)} />
           </label>
           <label>
@@ -181,20 +190,24 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
           <Button className="self-end" variant="outline" onClick={carregarCaixa}>
             Filtrar
           </Button>
+          <Button className="self-end" variant="outline" onClick={limparFiltros}>
+            <XCircle size={16} />
+            Limpar
+          </Button>
         </CardContent>
       </Card>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric title="Entradas" value={formatCurrency(resumo.entradas)} tone="green" />
-        <Metric title="Saídas" value={formatCurrency(resumo.saidas)} tone="rose" />
+        <Metric title="SaÃ­das" value={formatCurrency(resumo.saidas)} tone="rose" />
         <Metric title="Saldo caixa" value={formatCurrency(resumo.saldo)} tone="cyan" />
         <Metric title="Dinheiro" value={formatCurrency(resumo.dinheiro)} tone="amber" />
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <Metric title="PIX" value={formatCurrency(resumo.pix)} tone="green" />
-        <Metric title="Cartão crédito" value={formatCurrency(resumo.cartaoCredito)} tone="cyan" />
-        <Metric title="Cartão débito" value={formatCurrency(resumo.cartaoDebito)} tone="cyan" />
+        <Metric title="CartÃ£o crÃ©dito" value={formatCurrency(resumo.cartaoCredito)} tone="cyan" />
+        <Metric title="CartÃ£o dÃ©bito" value={formatCurrency(resumo.cartaoDebito)} tone="cyan" />
       </section>
 
       {mensagem && (
@@ -206,14 +219,14 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Nova movimentação manual</CardTitle>
+            <CardTitle>Nova movimentaÃ§Ã£o manual</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <label>
               <span className="field-label">Tipo</span>
               <Select value={form.tipo} onChange={(value) => setForm((current) => ({ ...current, tipo: value as "ENTRADA" | "SAIDA", pedidoId: value === "SAIDA" ? "" : current.pedidoId }))}>
                 <option value="ENTRADA">Entrada</option>
-                <option value="SAIDA">Saída</option>
+                <option value="SAIDA">SaÃ­da</option>
               </Select>
             </label>
             {form.tipo === "ENTRADA" && (
@@ -239,8 +252,8 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
               <Select value={form.formaPagamento} onChange={(value) => setForm((current) => ({ ...current, formaPagamento: value }))}>
                 <option value="DINHEIRO">Dinheiro</option>
                 <option value="PIX">PIX</option>
-                <option value="CARTAO_CREDITO">Cartão crédito</option>
-                <option value="CARTAO_DEBITO">Cartão débito</option>
+                <option value="CARTAO_CREDITO">CartÃ£o crÃ©dito</option>
+                <option value="CARTAO_DEBITO">CartÃ£o dÃ©bito</option>
               </Select>
             </label>
             <label>
@@ -259,21 +272,21 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
                 </Button>
               </div>
             </label>
-            <Field label="Descrição" value={form.descricao} onChange={(value) => setForm((current) => ({ ...current, descricao: value }))} />
+            <Field label="DescriÃ§Ã£o" value={form.descricao} onChange={(value) => setForm((current) => ({ ...current, descricao: value }))} />
             <Field label="Valor" value={form.valor} onChange={(value) => setForm((current) => ({ ...current, valor: maskCurrency(value) }))} />
             <label className="space-y-2">
-              <span className="field-label">Observação</span>
+              <span className="field-label">ObservaÃ§Ã£o</span>
               <Textarea value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} maxLength={300} />
             </label>
             <Button onClick={salvarMovimentacao} disabled={isSaving || !podeSalvar}>
-              {isSaving ? "Registrando..." : "Registrar movimentação"}
+              {isSaving ? "Registrando..." : "Registrar movimentaÃ§Ã£o"}
             </Button>
           </CardContent>
         </Card>
 
         <Card className="min-w-0">
           <CardHeader>
-            <CardTitle>Movimentações do caixa</CardTitle>
+            <CardTitle>MovimentaÃ§Ãµes do caixa</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <Table className="min-w-[920px]">
@@ -283,9 +296,9 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
                   <TableHead>Tipo</TableHead>
                   <TableHead>Forma</TableHead>
                   <TableHead>Categoria</TableHead>
-                  <TableHead>Descrição</TableHead>
+                  <TableHead>DescriÃ§Ã£o</TableHead>
                   <TableHead>Valor</TableHead>
-                  <TableHead>Usuário</TableHead>
+                  <TableHead>UsuÃ¡rio</TableHead>
                   <TableHead>Origem</TableHead>
                 </TableRow>
               </TableHeader>
@@ -294,7 +307,7 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
                   <TableRow key={mov.id}>
                     <TableCell className="whitespace-nowrap">{formatDateTime(mov.movimentadoEm)}</TableCell>
                     <TableCell>
-                      <Badge tone={mov.tipo === "ENTRADA" ? "success" : "danger"}>{mov.tipo === "ENTRADA" ? "Entrada" : "Saída"}</Badge>
+                      <Badge tone={mov.tipo === "ENTRADA" ? "success" : "danger"}>{mov.tipo === "ENTRADA" ? "Entrada" : "SaÃ­da"}</Badge>
                     </TableCell>
                     <TableCell>{formatFormaPagamento(mov.formaPagamento)}</TableCell>
                     <TableCell className="min-w-36 whitespace-normal">{mov.categoria}</TableCell>
@@ -395,8 +408,8 @@ function formatFormaPagamento(value: string) {
   const labels: Record<string, string> = {
     DINHEIRO: "Dinheiro",
     PIX: "PIX",
-    CARTAO_CREDITO: "Cartão crédito",
-    CARTAO_DEBITO: "Cartão débito"
+    CARTAO_CREDITO: "CartÃ£o crÃ©dito",
+    CARTAO_DEBITO: "CartÃ£o dÃ©bito"
   };
   return labels[value] ?? value;
 }
@@ -409,3 +422,4 @@ function formatDateTime(value: string) {
 
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
 }
+

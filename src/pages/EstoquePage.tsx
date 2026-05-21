@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { ApiError } from "@/services/api";
 import {
   atualizarProdutoEstoque,
   criarCategoriaEstoque,
@@ -124,7 +125,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
       observacao: ""
     });
     setStatusMensagem(null);
-    setTab("Movimentação");
+    setTab("MovimentaÃ§Ã£o");
   }
 
   async function salvarProduto() {
@@ -155,7 +156,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
       setProdutoForm(emptyProduto);
       setProdutoModalOpen(false);
     } catch {
-      setStatusMensagem("Não foi possível salvar o produto. Confira os campos e tente novamente.");
+      setStatusMensagem("NÃ£o foi possÃ­vel salvar o produto. Confira os campos e tente novamente.");
     } finally {
       setIsSaving(false);
     }
@@ -177,7 +178,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
       setProdutoForm((current) => ({ ...current, categoria: nome }));
       setStatusMensagem("Categoria cadastrada com sucesso.");
     } catch {
-      setStatusMensagem("Não foi possível cadastrar a categoria.");
+      setStatusMensagem("NÃ£o foi possÃ­vel cadastrar a categoria.");
     } finally {
       setIsSaving(false);
     }
@@ -197,11 +198,11 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
         custoUnitario: movForm.tipo === "ENTRADA" ? parseCurrency(movForm.custoUnitario) : null,
         observacao: movForm.observacao.trim() || null
       });
-      setStatusMensagem("Movimentação registrada com sucesso.");
+      setStatusMensagem("MovimentaÃ§Ã£o registrada com sucesso.");
       setMovForm({ produtoId: "", tipo: "ENTRADA", quantidade: "", custoUnitario: formatCurrency(0), pedidoId: "", observacao: "" });
       await carregarDados();
-    } catch {
-      setStatusMensagem("Não foi possível registrar a movimentação. Confira o produto e a quantidade.");
+    } catch (error) {
+      setStatusMensagem(error instanceof ApiError ? error.message : "Nao foi possivel registrar a movimentacao. Confira o produto e a quantidade.");
     } finally {
       setIsSaving(false);
     }
@@ -212,7 +213,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black">Controle de estoque</h1>
-          <p className="text-sm text-muted-foreground">Produtos, materiais, movimentações e alertas</p>
+          <p className="text-sm text-muted-foreground">Produtos, materiais, movimentaÃ§Ãµes e alertas</p>
         </div>
         <Button onClick={novoProduto}>
           <Plus size={16} />
@@ -220,7 +221,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
         </Button>
       </div>
 
-      <Tabs tabs={["Produtos", "Movimentação"]} active={tab} onChange={setTab} />
+      <Tabs tabs={["Produtos", "MovimentaÃ§Ã£o"]} active={tab} onChange={setTab} />
 
       {statusMensagem && (
         <p className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">
@@ -243,7 +244,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
           onPageChange={setPaginaProdutos}
         />
       )}
-      {tab === "Movimentação" && (
+      {tab === "MovimentaÃ§Ã£o" && (
         <Movimentacao
           produtos={produtos}
           movimentacoes={movimentacoes}
@@ -330,8 +331,8 @@ function Produtos({
         <Metric title="Total produtos" value={String(total)} tone="green" />
         <Metric title="Valor em estoque" value={formatCurrency(valorTotalProdutos)} tone="cyan" />
         <Metric title="Baixo estoque" value={String(baixoEstoque)} tone="rose" />
-        <Metric title="Entradas mês" value={String(entradasMes)} tone="green" />
-        <Metric title="Saídas mês" value={String(saidasMes)} tone="amber" />
+        <Metric title="Entradas mÃªs" value={String(entradasMes)} tone="green" />
+        <Metric title="SaÃ­das mÃªs" value={String(saidasMes)} tone="amber" />
       </section>
 
       <Card>
@@ -342,15 +343,15 @@ function Produtos({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Código</TableHead>
+                <TableHead>CÃ³digo</TableHead>
                 <TableHead>Produto</TableHead>
                 <TableHead>Tam.</TableHead>
                 <TableHead>Qtd.</TableHead>
-                <TableHead>Mín.</TableHead>
-                <TableHead>Custo médio</TableHead>
+                <TableHead>MÃ­n.</TableHead>
+                <TableHead>Custo mÃ©dio</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Ação</TableHead>
+                <TableHead>AÃ§Ã£o</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -452,10 +453,10 @@ function ProdutoFormCard({
             </Button>
           </div>
         </label>
-        <Field label="Estoque mínimo" value={form.estoqueMinimo} onChange={(value) => setForm((current) => ({ ...current, estoqueMinimo: value.replace(/\D/g, "") }))} />
+        <Field label="Estoque mÃ­nimo" value={form.estoqueMinimo} onChange={(value) => setForm((current) => ({ ...current, estoqueMinimo: value.replace(/\D/g, "") }))} />
         <Field className="md:col-span-2" label="Fornecedor" value={form.fornecedor} onChange={(value) => setForm((current) => ({ ...current, fornecedor: value }))} />
         <label className="md:col-span-2 space-y-2">
-          <span className="field-label">Observação</span>
+          <span className="field-label">ObservaÃ§Ã£o</span>
           <Textarea value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} maxLength={300} />
         </label>
         <div className="flex flex-wrap items-end gap-3 self-end">
@@ -463,7 +464,7 @@ function ProdutoFormCard({
             Cancelar
           </Button>
           <Button onClick={onSave} disabled={isSaving}>
-            {isSaving ? "Salvando..." : produtoSelecionado ? "Salvar alterações" : "Salvar produto"}
+            {isSaving ? "Salvando..." : produtoSelecionado ? "Salvar alteraÃ§Ãµes" : "Salvar produto"}
           </Button>
         </div>
       </CardContent>
@@ -503,7 +504,7 @@ function Movimentacao({
     <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
       <Card>
         <CardHeader>
-          <CardTitle>Nova movimentação</CardTitle>
+          <CardTitle>Nova movimentaÃ§Ã£o</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <label>
@@ -521,16 +522,16 @@ function Movimentacao({
             <span className="field-label">Tipo</span>
             <Select value={movForm.tipo} onChange={(value) => setMovForm((current) => ({ ...current, tipo: value as "ENTRADA" | "SAIDA" }))}>
               <option value="ENTRADA">Entrada</option>
-              <option value="SAIDA">Saída</option>
+              <option value="SAIDA">SaÃ­da</option>
             </Select>
           </label>
           <Field label="Quantidade" value={movForm.quantidade} onChange={(value) => setMovForm((current) => ({ ...current, quantidade: value.replace(/\D/g, "") }))} />
           {movForm.tipo === "ENTRADA" && (
-            <Field label="Custo unitário" value={movForm.custoUnitario} onChange={(value) => setMovForm((current) => ({ ...current, custoUnitario: maskCurrency(value) }))} />
+            <Field label="Custo unitÃ¡rio" value={movForm.custoUnitario} onChange={(value) => setMovForm((current) => ({ ...current, custoUnitario: maskCurrency(value) }))} />
           )}
           <Field label="Pedido vinculado" value={movForm.pedidoId} onChange={(value) => setMovForm((current) => ({ ...current, pedidoId: value.replace(/\D/g, "") }))} />
           <label className="space-y-2">
-            <span className="field-label">Observação</span>
+            <span className="field-label">ObservaÃ§Ã£o</span>
             <Textarea value={movForm.observacao} onChange={(event) => setMovForm((current) => ({ ...current, observacao: event.target.value }))} maxLength={300} />
           </label>
           <Button onClick={onRegister} disabled={isSaving || !podeRegistrar}>
@@ -540,7 +541,7 @@ function Movimentacao({
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>Histórico</CardTitle>
+          <CardTitle>HistÃ³rico</CardTitle>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>
@@ -562,7 +563,7 @@ function Movimentacao({
                   <TableRow key={`${mov.movimentadoEm ?? mov.data}-${mov.tipo}-${index}`}>
                     <TableCell>{formatDateTime(mov.movimentadoEm ?? mov.data)}</TableCell>
                     <TableCell>
-                      <Badge tone={tipo === "ENTRADA" ? "success" : "danger"}>{tipo === "ENTRADA" ? "Entrada" : "Saída"}</Badge>
+                      <Badge tone={tipo === "ENTRADA" ? "success" : "danger"}>{tipo === "ENTRADA" ? "Entrada" : "SaÃ­da"}</Badge>
                     </TableCell>
                     <TableCell>{mov.produto ?? "-"}</TableCell>
                     <TableCell>{mov.quantidade ?? mov.qtd ?? "-"}</TableCell>
@@ -688,4 +689,5 @@ function Metric({ title, value, tone }: { title: string; value: string; tone: "g
     </Card>
   );
 }
+
 

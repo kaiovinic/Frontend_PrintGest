@@ -37,6 +37,7 @@ type DespesaForm = {
   condicaoPagamento: "A_VISTA" | "PARCELADO";
   quantidadeParcelas: string;
   observacao: string;
+  jaPago: boolean;
 };
 
 const hoje = new Date();
@@ -99,7 +100,8 @@ const emptyForm: DespesaForm = {
   vencimento: new Date().toISOString().slice(0, 10),
   condicaoPagamento: "A_VISTA",
   quantidadeParcelas: "2",
-  observacao: ""
+  observacao: "",
+  jaPago: false
 };
 
 export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
@@ -146,7 +148,7 @@ export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
     ]);
     setVendas(vendasResponse);
     setEntradas(entradasResponse);
-    setDespesas({ ...despesasResponse, categorias: [...new Set([...emptyDespesas.categorias, ...despesasResponse.categorias])].sort((a, b) => a.localeCompare(b, "pt-BR")) });
+    setDespesas({ ...despesasResponse, categorias: normalizarCategorias([...emptyDespesas.categorias, ...despesasResponse.categorias]) });
     setGraficos(graficosResponse);
   }
 
@@ -192,7 +194,8 @@ export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
         vencimento: form.vencimento,
         condicaoPagamento: form.condicaoPagamento,
         quantidadeParcelas: form.condicaoPagamento === "PARCELADO" ? Number(form.quantidadeParcelas || 1) : 1,
-        observacao: form.observacao.trim() || null
+        observacao: form.observacao.trim() || null,
+        jaPago: form.jaPago
       });
       setForm(emptyForm);
       setMensagem("Despesa cadastrada com sucesso.");
@@ -342,6 +345,14 @@ function Entradas({ data, onPageChange }: { data: EntradasFinanceiro; onPageChan
 
 function Despesas({ data, form, setForm, expanded, setExpanded, grupoEditando, setGrupoEditando, onSave, onPay, isSaving }: { data: DespesasFinanceiro; form: DespesaForm; setForm: React.Dispatch<React.SetStateAction<DespesaForm>>; expanded: Record<string, boolean>; setExpanded: React.Dispatch<React.SetStateAction<Record<string, boolean>>>; grupoEditando: DespesaGrupo | null; setGrupoEditando: React.Dispatch<React.SetStateAction<DespesaGrupo | null>>; onSave: () => void; onPay: (id: number) => void; isSaving: boolean }) {
   const grupos = useMemo(() => agruparDespesas(data.despesas), [data.despesas]);
+  const [paginaDespesas, setPaginaDespesas] = useState(1);
+  const tamanhoPaginaDespesas = 10;
+  const totalPaginasDespesas = Math.max(1, Math.ceil(grupos.length / tamanhoPaginaDespesas));
+  const paginaAtualDespesas = Math.min(paginaDespesas, totalPaginasDespesas);
+  const gruposPaginados = grupos.slice((paginaAtualDespesas - 1) * tamanhoPaginaDespesas, paginaAtualDespesas * tamanhoPaginaDespesas);
+  useEffect(() => {
+    setPaginaDespesas(1);
+  }, [data.despesas]);
   const parcelasPreview = buildParcelasPreview(parseCurrency(form.valor), form.vencimento, form.condicaoPagamento === "PARCELADO" ? Number(form.quantidadeParcelas || 1) : 1);
 
   function editarGrupo(grupo: DespesaGrupo) {
@@ -355,7 +366,8 @@ function Despesas({ data, form, setForm, expanded, setExpanded, grupoEditando, s
       vencimento: primeiraParcela?.vencimento ?? new Date().toISOString().slice(0, 10),
       condicaoPagamento: grupo.parcelas.length > 1 ? "PARCELADO" : "A_VISTA",
       quantidadeParcelas: String(grupo.parcelas.length || 1),
-      observacao: primeiraParcela?.observacao ?? ""
+      observacao: primeiraParcela?.observacao ?? "",
+      jaPago: grupo.valorAberto <= 0
     });
   }
 
@@ -393,6 +405,7 @@ function Despesas({ data, form, setForm, expanded, setExpanded, grupoEditando, s
             <Field label="Condição"><Select value={form.condicaoPagamento} onChange={(value) => setForm((current) => ({ ...current, condicaoPagamento: value as DespesaForm["condicaoPagamento"] }))}><option value="A_VISTA">À vista</option><option value="PARCELADO">Parcelado</option></Select></Field>
             {form.condicaoPagamento === "PARCELADO" && <Field label="Quantidade de parcelas"><Input value={form.quantidadeParcelas} onChange={(event) => setForm((current) => ({ ...current, quantidadeParcelas: event.target.value.replace(/\D/g, "") }))} /></Field>}
             <Field label="Observação"><Input value={form.observacao} onChange={(event) => setForm((current) => ({ ...current, observacao: event.target.value }))} /></Field>
+            {!grupoEditando && <label className="flex items-center gap-2 rounded-md border p-3 text-sm font-semibold"><input type="checkbox" checked={form.jaPago} onChange={(event) => setForm((current) => ({ ...current, jaPago: event.target.checked }))} /> Despesa ja foi paga</label>}
             {parcelasPreview.length > 1 && <div className="rounded-md border p-3 text-sm"><p className="mb-2 font-black">Prévia das parcelas</p>{parcelasPreview.map((parcela) => <p key={parcela.numero}>{parcela.numero}/{parcelasPreview.length} - {formatCurrency(parcela.valor)} - {formatDate(parcela.vencimento)}</p>)}</div>}
             <div className="flex flex-wrap gap-2">
               {grupoEditando && <Button variant="outline" onClick={cancelarEdicao} disabled={isSaving}>Cancelar edição</Button>}
@@ -406,11 +419,12 @@ function Despesas({ data, form, setForm, expanded, setExpanded, grupoEditando, s
             <Table className="min-w-[980px]">
               <TableHeader><TableRow><TableHead></TableHead><TableHead>Categoria</TableHead><TableHead>Descrição</TableHead><TableHead>Parcelas</TableHead><TableHead>Valor total</TableHead><TableHead>Aberto</TableHead><TableHead>Status</TableHead><TableHead>Ação</TableHead></TableRow></TableHeader>
               <TableBody>
-                {grupos.map((grupo) => (
+                {gruposPaginados.map((grupo) => (
                   <FragmentGroup key={grupo.id} grupo={grupo} expanded={Boolean(expanded[grupo.id])} onToggle={() => setExpanded((current) => ({ ...current, [grupo.id]: !current[grupo.id] }))} onEdit={editarGrupo} onPay={onPay} />
                 ))}
               </TableBody>
             </Table>
+            <Paginacao total={grupos.length} pagina={paginaAtualDespesas} totalPaginas={totalPaginasDespesas} onPageChange={setPaginaDespesas} label="despesa" />
           </CardContent>
         </Card>
       </div>
@@ -474,5 +488,20 @@ function formatDateTime(value: string) { const date = new Date(value); return Nu
 
 type DespesaGrupo = { id: string; categoria: string; descricao: string; valorTotal: number; valorAberto: number; parcelas: Despesa[] };
 function agruparDespesas(despesas: Despesa[]): DespesaGrupo[] { const map = new Map<string, DespesaGrupo>(); despesas.forEach((despesa) => { const id = despesa.grupoDespesaId || String(despesa.id); const grupo = map.get(id) ?? { id, categoria: despesa.categoria, descricao: despesa.descricao, valorTotal: despesa.valorTotal || despesa.valor, valorAberto: 0, parcelas: [] }; grupo.parcelas.push(despesa); grupo.valorAberto = grupo.parcelas.filter((item) => item.status !== "PAGO").reduce((sum, item) => sum + item.valor, 0); map.set(id, grupo); }); return Array.from(map.values()); }
+function normalizarCategorias(categorias: string[]) {
+  const map = new Map<string, string>();
+  categorias.forEach((categoria) => {
+    const nome = categoria.trim();
+    if (!nome) return;
+    const chave = nome.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+    if (!map.has(chave)) map.set(chave, formatCategoria(nome));
+  });
+  return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function formatCategoria(value: string) {
+  return value.split(/s+/).map((word) => word.length <= 2 ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(" ");
+}
+
 function buildParcelasPreview(total: number, vencimento: string, quantidade: number) { if (total <= 0 || !vencimento) return []; const qtd = Math.max(1, quantidade); const parcela = Math.round((total / qtd) * 100) / 100; let restante = total; return Array.from({ length: qtd }, (_, index) => { const valor = index === qtd - 1 ? restante : parcela; restante -= valor; return { numero: index + 1, valor, vencimento: addMonths(vencimento, index) }; }); }
 function addMonths(value: string, months: number) { const date = new Date(`${value}T00:00:00`); date.setMonth(date.getMonth() + months); return date.toISOString().slice(0, 10); }

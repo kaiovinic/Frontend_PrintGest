@@ -1,4 +1,4 @@
-﻿import { Eye, Filter, Plus } from "lucide-react";
+﻿import { Eye, Filter, Plus, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Page } from "@/components/AppLayout";
 import { Badge } from "@/components/ui/badge";
@@ -43,10 +43,11 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
   const [total, setTotal] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
-  function carregarPedidos(paginaDesejada = pagina) {
+  function carregarPedidos(paginaDesejada = pagina, filtrosOverride?: { ano: string; mes: string; inicio: string; fim: string; status: string }) {
+    const filtrosAtuais = filtrosOverride ?? { ano, mes, inicio: dataInicio, fim: dataFinal, status };
     setIsLoading(true);
     setError(null);
-    listarPedidos({ ano, mes, inicio: dataInicio, fim: dataFinal, status, pagina: paginaDesejada, tamanhoPagina })
+    listarPedidos({ ...filtrosAtuais, pagina: paginaDesejada, tamanhoPagina })
       .then((resultado) => {
         setPedidos(resultado.itens);
         setTotal(resultado.total);
@@ -88,6 +89,22 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
     carregarPedidos(1);
   }
 
+  function limparFiltros() {
+    const filtrosLimpos = {
+      ano: String(currentDate.getFullYear()),
+      mes: String(currentDate.getMonth() + 1).padStart(2, "0"),
+      inicio: "",
+      fim: "",
+      status: ""
+    };
+    setAno(filtrosLimpos.ano);
+    setMes(filtrosLimpos.mes);
+    setDataInicio(filtrosLimpos.inicio);
+    setDataFinal(filtrosLimpos.fim);
+    setStatus(filtrosLimpos.status);
+    carregarPedidos(1, filtrosLimpos);
+  }
+
   function mudarPagina(proximaPagina: number) {
     if (proximaPagina < 1 || proximaPagina > totalPaginas || proximaPagina === pagina) return;
     carregarPedidos(proximaPagina);
@@ -114,7 +131,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
       </section>
 
       <Card>
-        <CardContent className="grid gap-3 p-5 md:grid-cols-6">
+        <CardContent className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-[140px_180px_1fr_1fr_190px_auto_auto]">
           <label>
             <span className="field-label">Ano</span>
             <Input className="mt-2" value={ano} onChange={(event) => setAno(event.target.value)} disabled={Boolean(dataInicio || dataFinal)} />
@@ -147,9 +164,13 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
               <option value="Cancelado">Cancelado</option>
             </Select>
           </label>
-          <Button className="mt-6" variant="outline" onClick={aplicarFiltro}>
+          <Button className="self-end" variant="outline" onClick={aplicarFiltro}>
             <Filter size={16} />
             Filtrar
+          </Button>
+          <Button className="self-end" variant="outline" onClick={limparFiltros}>
+            <XCircle size={16} />
+            Limpar
           </Button>
         </CardContent>
       </Card>
@@ -311,3 +332,4 @@ function Metric({ title, value, tone }: { title: string; value: string; tone: "a
     </Card>
   );
 }
+
