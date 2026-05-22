@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, Ban, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useController, useFieldArray, useForm, type Control } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,44 @@ const pedidoSchema = z.object({
 
 type PedidoFormData = z.infer<typeof pedidoSchema>;
 type CondicaoPagamento = "Pago" | "Pagar na Entrega" | "Parcelado";
+
+const ItemRow = memo(function ItemRow({
+  index,
+  control,
+  canRemove,
+  onRemove
+}: {
+  index: number;
+  control: Control<PedidoFormData>;
+  canRemove: boolean;
+  onRemove: (index: number) => void;
+}) {
+  const { field: qtyField } = useController({ control, name: `items.${index}.quantidade` });
+  const { field: tamField } = useController({ control, name: `items.${index}.tamanho` });
+  const { field: descField } = useController({ control, name: `items.${index}.descricao` });
+  const { field: precoField } = useController({ control, name: `items.${index}.precoUnitario` });
+
+  const itemTotal = Number(qtyField.value || 0) * parseCurrency(precoField.value);
+
+  return (
+    <div className="grid gap-3 md:grid-cols-[90px_110px_1fr_160px_160px_48px]">
+      <Field label="Quant." value={qtyField.value} onChange={(v) => qtyField.onChange(v.replace(/\D/g, ""))} />
+      <Field label="Tam." value={tamField.value} onChange={(v) => tamField.onChange(v)} />
+      <Field label="Descrição" value={descField.value} onChange={(v) => descField.onChange(v)} />
+      <Field label="Preço unitário" value={precoField.value} onChange={(v) => precoField.onChange(maskCurrency(v))} />
+      <Field label="Total" value={formatCurrency(itemTotal)} onChange={() => undefined} readOnly />
+      <Button
+        className="mt-6"
+        size="icon"
+        variant="outline"
+        onClick={() => { if (canRemove) onRemove(index); }}
+        aria-label="Remover item"
+      >
+        <Trash2 size={16} />
+      </Button>
+    </div>
+  );
+});
 
 export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | null; usuarioId: number }) {
   const queryClient = useQueryClient();
@@ -116,6 +154,8 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
+
+  const removeItem = useCallback((index: number) => remove(index), [remove]);
 
   const tipo = watch("tipo");
   const condicaoPagamento = watch("condicaoPagamento") as CondicaoPagamento;
@@ -499,16 +539,13 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
         </CardHeader>
         <CardContent className="space-y-3">
           {fields.map((field, index) => (
-            <div key={field.id} className="grid gap-3 md:grid-cols-[90px_110px_1fr_160px_160px_48px]">
-              <Field label="Quant." value={watchedItems[index]?.quantidade ?? ""} onChange={(v) => setValue(`items.${index}.quantidade`, v.replace(/\D/g, ""))} />
-              <Field label="Tam." value={watchedItems[index]?.tamanho ?? ""} onChange={(v) => setValue(`items.${index}.tamanho`, v)} />
-              <Field label="Descrição" value={watchedItems[index]?.descricao ?? ""} onChange={(v) => setValue(`items.${index}.descricao`, v)} />
-              <Field label="Preço unitário" value={watchedItems[index]?.precoUnitario ?? ""} onChange={(v) => setValue(`items.${index}.precoUnitario`, maskCurrency(v))} />
-              <Field label="Total" value={formatCurrency(totalItem(watchedItems[index] ?? { quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }))} onChange={() => undefined} readOnly />
-              <Button className="mt-6" size="icon" variant="outline" onClick={() => { if (fields.length > 1) remove(index); }} aria-label="Remover item">
-                <Trash2 size={16} />
-              </Button>
-            </div>
+            <ItemRow
+              key={field.id}
+              index={index}
+              control={control}
+              canRemove={fields.length > 1}
+              onRemove={removeItem}
+            />
           ))}
         </CardContent>
       </Card>
