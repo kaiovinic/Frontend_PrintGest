@@ -28,11 +28,13 @@ import {
   atualizarProdutoEstoque,
   criarCategoriaEstoque,
   criarProdutoEstoque,
+  editarMovimentacaoEstoque,
   listarCategoriasEstoque,
   listarMovimentacoesEstoque,
   listarProdutosEstoque,
   registrarMovimentacaoEstoque,
   type CategoriaEstoque,
+  type EditarMovimentacaoPayload,
   type MovimentacaoEstoque,
   type ProdutoEstoque,
   type ProdutoPayload,
@@ -99,6 +101,33 @@ const movimentacaoSchema = z
 
 type MovimentacaoForm = z.infer<typeof movimentacaoSchema>;
 
+const editarMovimentacaoSchema = z
+  .object({
+    tipo: z.enum(["ENTRADA", "SAIDA"]),
+    quantidade: z.string().min(1, "Informe a quantidade."),
+    custoUnitario: z.string().optional(),
+    pedidoId: z.string().optional(),
+    observacao: z
+      .string()
+      .max(300, "A observacao deve ter no maximo 300 caracteres.")
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (Number(data.quantidade) <= 0)
+      ctx.addIssue({
+        code: "custom",
+        path: ["quantidade"],
+        message: "Informe uma quantidade maior que zero.",
+      });
+    if (data.tipo === "ENTRADA" && parseCurrency(data.custoUnitario ?? "") <= 0)
+      ctx.addIssue({
+        code: "custom",
+        path: ["custoUnitario"],
+        message: "Informe o custo unitario da entrada.",
+      });
+  });
+type EditarMovimentacaoForm = z.infer<typeof editarMovimentacaoSchema>;
+
 const produtoDefaultValues: ProdutoForm = {
   nome: "",
   categoria: "",
@@ -110,6 +139,13 @@ const produtoDefaultValues: ProdutoForm = {
 };
 const movimentacaoDefaultValues: MovimentacaoForm = {
   produtoId: "",
+  tipo: "ENTRADA",
+  quantidade: "",
+  custoUnitario: formatCurrency(0),
+  pedidoId: "",
+  observacao: "",
+};
+const editarMovimentacaoDefaultValues: EditarMovimentacaoForm = {
   tipo: "ENTRADA",
   quantidade: "",
   custoUnitario: formatCurrency(0),
@@ -155,6 +191,13 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
     defaultValues: movimentacaoDefaultValues,
   });
   const tipoMovimentacao = movimentacaoForm.watch("tipo");
+  const [movimentacaoEditando, setMovimentacaoEditando] =
+    useState<MovimentacaoEstoque | null>(null);
+  const editarMovimentacaoForm = useForm<EditarMovimentacaoForm>({
+    resolver: zodResolver(editarMovimentacaoSchema),
+    defaultValues: editarMovimentacaoDefaultValues,
+  });
+  const tipoEdicao = editarMovimentacaoForm.watch("tipo");
 
   const produtosQuery = useQuery({
     queryKey: estoqueKeys.produtos(paginaProdutos),
@@ -273,10 +316,45 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
       ),
   });
 
+  const editarMovimentacaoMutation = useMutation({
+    mutationFn: ({
+      id,
+      values,
+    }: {
+      id: number;
+      values: EditarMovimentacaoForm;
+    }) => {
+      const payload: EditarMovimentacaoPayload = {
+        tipo: values.tipo,
+        quantidade: Number(values.quantidade),
+        custoUnitario:
+          values.tipo === "ENTRADA"
+            ? parseCurrency(values.custoUnitario ?? "")
+            : null,
+        pedidoId: values.pedidoId ? Number(values.pedidoId) : null,
+        observacao: values.observacao?.trim() || null,
+      };
+      return editarMovimentacaoEstoque(id, payload);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["estoque"] });
+      setMovimentacaoEditando(null);
+      editarMovimentacaoForm.reset(editarMovimentacaoDefaultValues);
+      setStatusMensagem("Movimentacao atualizada com sucesso.");
+    },
+    onError: (error) =>
+      setStatusMensagem(
+        error instanceof ApiError
+          ? error.message
+          : "Nao foi possivel atualizar a movimentacao.",
+      ),
+  });
+
   const isSaving =
     produtoMutation.isPending ||
     categoriaMutation.isPending ||
-    movimentacaoMutation.isPending;
+    movimentacaoMutation.isPending ||
+    editarMovimentacaoMutation.isPending;
 
   function novoProduto() {
     setProdutoSelecionado(null);
@@ -292,6 +370,21 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
     setStatusMensagem(null);
     setTab("Produtos");
     setProdutoModalOpen(true);
+  }
+
+  function iniciarEdicaoMovimentacao(mov: MovimentacaoEstoque) {
+    const tipo = normalizarTipo(mov.tipo) as "ENTRADA" | "SAIDA";
+    editarMovimentacaoForm.reset({
+      tipo,
+      quantidade: String(mov.quantidade ?? ""),
+      custoUnitario:
+        mov.custoUnitario != null
+          ? formatCurrency(mov.custoUnitario)
+          : formatCurrency(0),
+      pedidoId: mov.pedidoId ? String(mov.pedidoId) : "",
+      observacao: mov.observacao ?? "",
+    });
+    setMovimentacaoEditando(mov);
   }
 
   function movimentarProduto(produto: ProdutoEstoque) {
@@ -366,6 +459,7 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
           onRegister={movimentacaoForm.handleSubmit((values) =>
             movimentacaoMutation.mutate(values),
           )}
+          onEditar={iniciarEdicaoMovimentacao}
           isSaving={isSaving}
           total={movimentacoesResponse.total}
           pagina={movimentacoesResponse.pagina}
@@ -428,6 +522,130 @@ export function EstoquePage({ usuarioId }: { usuarioId: number }) {
               </form>
             </CardContent>
           </Card>
+        </div>
+      )}
+      {movimentacaoEditando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <form
+            className="w-full max-w-lg"
+            onSubmit={editarMovimentacaoForm.handleSubmit((values) =>
+              editarMovimentacaoMutation.mutate({
+                id: movimentacaoEditando.id!,
+                values,
+              }),
+            )}
+          >
+            <Card className="shadow-2xl">
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <CardTitle>
+                  Editar movimentacao #{movimentacaoEditando.id}
+                </CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setMovimentacaoEditando(null)}
+                  disabled={isSaving}
+                >
+                  Fechar
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <span className="field-label">Produto</span>
+                  <p className="mt-2 rounded-md border border-input bg-muted px-3 py-2 text-sm font-semibold">
+                    #{movimentacaoEditando.produtoId} -{" "}
+                    {movimentacaoEditando.produto}
+                    {movimentacaoEditando.tamanho
+                      ? ` ${movimentacaoEditando.tamanho}`
+                      : ""}
+                  </p>
+                </div>
+                <label>
+                  <span className="field-label">Tipo</span>
+                  <Select register={editarMovimentacaoForm.register("tipo")}>
+                    <option value="ENTRADA">Entrada</option>
+                    <option value="SAIDA">Saida</option>
+                  </Select>
+                </label>
+                <FieldError
+                  message={
+                    editarMovimentacaoForm.formState.errors.quantidade?.message
+                  }
+                >
+                  <Field
+                    label="Quantidade"
+                    register={editarMovimentacaoForm.register("quantidade", {
+                      onChange: (e) =>
+                        editarMovimentacaoForm.setValue(
+                          "quantidade",
+                          e.target.value.replace(/\D/g, ""),
+                        ),
+                    })}
+                  />
+                </FieldError>
+                {tipoEdicao === "ENTRADA" && (
+                  <FieldError
+                    message={
+                      editarMovimentacaoForm.formState.errors.custoUnitario
+                        ?.message
+                    }
+                  >
+                    <Field
+                      label="Custo unitario"
+                      register={editarMovimentacaoForm.register(
+                        "custoUnitario",
+                        {
+                          onChange: (e) =>
+                            editarMovimentacaoForm.setValue(
+                              "custoUnitario",
+                              maskCurrency(e.target.value),
+                            ),
+                        },
+                      )}
+                    />
+                  </FieldError>
+                )}
+                <Field
+                  label="Pedido vinculado"
+                  register={editarMovimentacaoForm.register("pedidoId", {
+                    onChange: (e) =>
+                      editarMovimentacaoForm.setValue(
+                        "pedidoId",
+                        e.target.value.replace(/\D/g, ""),
+                      ),
+                  })}
+                />
+                <label className="space-y-2">
+                  <span className="field-label">Observacao</span>
+                  <Textarea
+                    {...editarMovimentacaoForm.register("observacao")}
+                    maxLength={300}
+                  />
+                  {editarMovimentacaoForm.formState.errors.observacao && (
+                    <ErrorText
+                      message={
+                        editarMovimentacaoForm.formState.errors.observacao
+                          .message
+                      }
+                    />
+                  )}
+                </label>
+                <div className="flex justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setMovimentacaoEditando(null)}
+                    disabled={isSaving}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" disabled={isSaving}>
+                    {isSaving ? "Salvando..." : "Salvar alteracoes"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </form>
         </div>
       )}
     </div>
@@ -522,6 +740,8 @@ function Produtos({
                 <TableHead>Min.</TableHead>
                 <TableHead>Custo medio</TableHead>
                 <TableHead>Total</TableHead>
+                <TableHead>Fornecedor</TableHead>
+                <TableHead>Observacao</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Acao</TableHead>
               </TableRow>
@@ -529,12 +749,14 @@ function Produtos({
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={9}>Carregando produtos...</TableCell>
+                  <TableCell colSpan={11}>Carregando produtos...</TableCell>
                 </TableRow>
               )}
               {!isLoading && produtosFiltrados.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9}>Nenhum produto encontrado.</TableCell>
+                  <TableCell colSpan={11}>
+                    Nenhum produto encontrado.
+                  </TableCell>
                 </TableRow>
               )}
               {!isLoading &&
@@ -552,6 +774,10 @@ function Produtos({
                       </TableCell>
                       <TableCell>
                         {formatCurrency(valorTotalEstoque(produto))}
+                      </TableCell>
+                      <TableCell>{produto.fornecedor ?? "-"}</TableCell>
+                      <TableCell className="max-w-[160px] truncate">
+                        {produto.observacao ?? "-"}
                       </TableCell>
                       <TableCell>
                         <Badge tone={status === "OK" ? "success" : "danger"}>
@@ -710,6 +936,7 @@ function Movimentacao({
   form,
   tipoMovimentacao,
   onRegister,
+  onEditar,
   isSaving,
   total,
   pagina,
@@ -722,6 +949,7 @@ function Movimentacao({
   form: UseFormReturn<MovimentacaoForm>;
   tipoMovimentacao: "ENTRADA" | "SAIDA";
   onRegister: () => void;
+  onEditar: (mov: MovimentacaoEstoque) => void;
   isSaving: boolean;
   total: number;
   pagina: number;
@@ -824,17 +1052,18 @@ function Movimentacao({
                 <TableHead>Custo</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Resp.</TableHead>
+                <TableHead>Acao</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={8}>Carregando movimentacoes...</TableCell>
+                  <TableCell colSpan={9}>Carregando movimentacoes...</TableCell>
                 </TableRow>
               )}
               {!isLoading && movimentacoes.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={9}>
                     Nenhuma movimentacao encontrada.
                   </TableCell>
                 </TableRow>
@@ -867,6 +1096,15 @@ function Movimentacao({
                       </TableCell>
                       <TableCell>
                         {mov.usuario ?? mov.responsavel ?? mov.resp ?? "-"}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onEditar(mov)}
+                        >
+                          Editar
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );

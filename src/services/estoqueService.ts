@@ -31,6 +31,7 @@ export type MovimentacaoEstoque = {
   tipo: string;
   produto?: string;
   tamanho?: string | null;
+  produtoId?: number;
   usuario?: string;
   quantidade?: number;
   qtd?: string;
@@ -101,6 +102,21 @@ export function atualizarProdutoEstoque(id: number, payload: ProdutoPayload) {
 export function registrarMovimentacaoEstoque(payload: MovimentacaoPayload) {
   return apiRequest<{ mensagem: string }>("/estoque/movimentacoes", {
     method: "POST",
+    body: payload
+  });
+}
+
+export type EditarMovimentacaoPayload = {
+  tipo: "ENTRADA" | "SAIDA";
+  quantidade: number;
+  custoUnitario: number | null;
+  pedidoId: number | null;
+  observacao: string | null;
+};
+
+export function editarMovimentacaoEstoque(id: number, payload: EditarMovimentacaoPayload) {
+  return apiRequest<void>(`/estoque/movimentacoes/${id}`, {
+    method: "PUT",
     body: payload
   });
 }
