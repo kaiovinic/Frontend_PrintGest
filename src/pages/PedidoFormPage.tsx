@@ -354,6 +354,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       setSaldoDevedor(0);
       setFinalizarModalOpen(false);
       await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      await queryClient.invalidateQueries({ queryKey: ["caixa"] });
       setStatusMensagem("Pedido finalizado com sucesso.");
     } catch (error) {
       setStatusMensagem(error instanceof ApiError ? error.message : "Não foi possível finalizar este pedido.");

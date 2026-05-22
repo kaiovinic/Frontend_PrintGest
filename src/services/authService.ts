@@ -7,6 +7,7 @@ export type AuthUser = {
   perfil: "ADMIN" | "GERENTE" | "OPERACIONAL" | string;
   deveTrocarSenha: boolean;
   accessToken: string;
+  expiresAt: string;
 };
 
 export type LoginPayload = {

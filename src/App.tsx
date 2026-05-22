@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppLayout, type Page } from "@/components/AppLayout";
 import { CaixaPage } from "@/pages/CaixaPage";
 import { ContaPage } from "@/pages/ContaPage";
@@ -19,9 +19,21 @@ const USER_STORAGE_KEY = "printgest:user";
 const PAGE_STORAGE_KEY = "printgest:page";
 const PEDIDO_STORAGE_KEY = "printgest:selectedPedido";
 
+function isSessionExpired(user: AuthUser): boolean {
+  if (!user.expiresAt) return true;
+  return new Date(user.expiresAt) <= new Date();
+}
+
 export default function App() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [user, setUser] = useState<AuthUser | null>(() => readJson<AuthUser>(USER_STORAGE_KEY));
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    const stored = readJson<AuthUser>(USER_STORAGE_KEY);
+    if (stored && isSessionExpired(stored)) {
+      sessionStorage.removeItem(USER_STORAGE_KEY);
+      return null;
+    }
+    return stored;
+  });
   const [page, setCurrentPage] = useState<Page>(() => getInitialPage());
   const [history, setHistory] = useState<Page[]>([]);
   const [selectedPedido, setSelectedPedido] = useState<PedidoResumo | null>(() => readJson<PedidoResumo>(PEDIDO_STORAGE_KEY));
@@ -44,6 +56,42 @@ export default function App() {
   }, []);
 
   const toggleTheme = () => setTheme((current) => (current === "dark" ? "light" : "dark"));
+
+  const handleLogout = useCallback(() => {
+    setUser(null);
+    setCurrentPage("dashboard");
+    setHistory([]);
+    setSelectedPedido(null);
+    sessionStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(PAGE_STORAGE_KEY);
+    sessionStorage.removeItem(PEDIDO_STORAGE_KEY);
+    window.location.hash = "";
+  }, []);
+
+  // Redirect to login when token expires
+  useEffect(() => {
+    if (!user) return;
+
+    if (isSessionExpired(user)) {
+      handleLogout();
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (isSessionExpired(user)) {
+        handleLogout();
+      }
+    }, 60_000);
+
+    return () => clearInterval(interval);
+  }, [user, handleLogout]);
+
+  // Redirect to login on 401 from any API call
+  useEffect(() => {
+    const handler = () => handleLogout();
+    window.addEventListener("auth:unauthorized", handler);
+    return () => window.removeEventListener("auth:unauthorized", handler);
+  }, [handleLogout]);
 
   function setPage(nextPage: Page, pedido?: PedidoResumo | null) {
     setHistory((current) => [...current, page]);
@@ -82,17 +130,6 @@ export default function App() {
     localStorage.setItem(PAGE_STORAGE_KEY, "dashboard");
     window.location.hash = "/dashboard";
     setHistory([]);
-  }
-
-  function handleLogout() {
-    setUser(null);
-    setCurrentPage("dashboard");
-    setHistory([]);
-    setSelectedPedido(null);
-    sessionStorage.removeItem(USER_STORAGE_KEY);
-    localStorage.removeItem(PAGE_STORAGE_KEY);
-    sessionStorage.removeItem(PEDIDO_STORAGE_KEY);
-    window.location.hash = "";
   }
 
   if (!user) {
