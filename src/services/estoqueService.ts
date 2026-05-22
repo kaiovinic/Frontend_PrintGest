@@ -30,6 +30,7 @@ export type MovimentacaoEstoque = {
   data?: string;
   tipo: string;
   produto?: string;
+  tamanho?: string | null;
   usuario?: string;
   quantidade?: number;
   qtd?: string;

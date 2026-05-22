@@ -461,6 +461,15 @@ function Produtos({
   isLoading: boolean;
   onPageChange: (pagina: number) => void;
 }) {
+  const [filtroCodigo, setFiltroCodigo] = useState("");
+  const [filtroDescricao, setFiltroDescricao] = useState("");
+
+  const produtosFiltrados = produtos.filter((p) => {
+    const codigoOk = filtroCodigo === "" || String(p.id).includes(filtroCodigo.trim());
+    const descricaoOk = filtroDescricao === "" || p.nome.toLowerCase().includes(filtroDescricao.trim().toLowerCase());
+    return codigoOk && descricaoOk;
+  });
+
   return (
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-5">
@@ -482,7 +491,27 @@ function Produtos({
         <CardHeader>
           <CardTitle>Produtos em estoque</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent className="space-y-4 overflow-x-auto">
+          <div className="flex flex-wrap gap-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-muted-foreground">Codigo</span>
+              <Input
+                className="h-9 w-32"
+                placeholder="Ex: 12"
+                value={filtroCodigo}
+                onChange={(e) => setFiltroCodigo(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-muted-foreground">Descricao</span>
+              <Input
+                className="h-9 w-56"
+                placeholder="Buscar por nome..."
+                value={filtroDescricao}
+                onChange={(e) => setFiltroDescricao(e.target.value)}
+              />
+            </div>
+          </div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -503,13 +532,13 @@ function Produtos({
                   <TableCell colSpan={9}>Carregando produtos...</TableCell>
                 </TableRow>
               )}
-              {!isLoading && produtos.length === 0 && (
+              {!isLoading && produtosFiltrados.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={9}>Nenhum produto encontrado.</TableCell>
                 </TableRow>
               )}
               {!isLoading &&
-                produtos.map((produto) => {
+                produtosFiltrados.map((produto) => {
                   const status = statusProduto(produto);
                   return (
                     <TableRow key={produto.id}>
@@ -715,7 +744,7 @@ function Movimentacao({
                   <option value="">Selecione um produto</option>
                   {produtos.map((produto) => (
                     <option key={produto.id} value={produto.id}>
-                      #{produto.id} - {produto.nome}
+                      #{produto.id} - {produto.nome}{produto.tamanho ? ` ${produto.tamanho}` : ""}
                     </option>
                   ))}
                 </Select>
@@ -790,6 +819,7 @@ function Movimentacao({
                 <TableHead>Data</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Produto</TableHead>
+                <TableHead>Tam.</TableHead>
                 <TableHead>Qtd.</TableHead>
                 <TableHead>Custo</TableHead>
                 <TableHead>Total</TableHead>
@@ -799,12 +829,12 @@ function Movimentacao({
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={7}>Carregando movimentacoes...</TableCell>
+                  <TableCell colSpan={8}>Carregando movimentacoes...</TableCell>
                 </TableRow>
               )}
               {!isLoading && movimentacoes.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={8}>
                     Nenhuma movimentacao encontrada.
                   </TableCell>
                 </TableRow>
@@ -825,6 +855,7 @@ function Movimentacao({
                         </Badge>
                       </TableCell>
                       <TableCell>{mov.produto ?? "-"}</TableCell>
+                      <TableCell>{mov.tamanho ?? "-"}</TableCell>
                       <TableCell>{mov.quantidade ?? mov.qtd ?? "-"}</TableCell>
                       <TableCell>
                         {mov.custoUnitario
