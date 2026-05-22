@@ -16,7 +16,7 @@ const currentDate = new Date();
 const meses = [
   ["01", "Janeiro"],
   ["02", "Fevereiro"],
-  ["03", "Mar\u00e7o"],
+  ["03", "Março"],
   ["04", "Abril"],
   ["05", "Maio"],
   ["06", "Junho"],

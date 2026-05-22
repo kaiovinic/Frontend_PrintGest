@@ -98,6 +98,16 @@ export type GraficoPonto = {
   cliente?: string;
 };
 
+export type PedidoStatus = {
+  status: string;
+  quantidade: number;
+};
+
+export type UsuarioRanking = {
+  usuario: string;
+  quantidadePedidos: number;
+};
+
 export type GraficosFinanceiro = {
   ano: number;
   mes: number;
@@ -105,6 +115,8 @@ export type GraficosFinanceiro = {
   despesaAnual: GraficoPonto[];
   despesasMes: GraficoPonto[];
   clientesMes: GraficoPonto[];
+  pedidosPorStatus: PedidoStatus[];
+  usuariosRanking: UsuarioRanking[];
 };
 
 export type DespesaAtualizarPayload = {

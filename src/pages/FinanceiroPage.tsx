@@ -1,5 +1,19 @@
+﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -105,6 +119,7 @@ const emptyForm: DespesaForm = {
 };
 
 export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState("Vendas");
   const [ano, setAno] = useState(anoAtual);
   const [mes, setMes] = useState(mesAtual);
@@ -135,23 +150,63 @@ export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
     setPaginaEntradas(1);
   }, [ano, dataFinal, dataInicio, mes, status]);
 
+  const financeiroQuery = useQuery({
+    queryKey: ["financeiro", filtros, paginaVendas, paginaEntradas, ano, mes],
+    queryFn: async () => {
+      const [vendasResponse, entradasResponse, despesasResponse, graficosResponse] = await Promise.all([
+        obterVendasFinanceiro({ ...filtros, pagina: paginaVendas, tamanhoPagina: 10 }),
+        obterEntradasFinanceiro({ ...filtros, pagina: paginaEntradas, tamanhoPagina: 10 }),
+        obterDespesasFinanceiro(filtros),
+        obterGraficosFinanceiro({ ano, mes })
+      ]);
+      return { vendasResponse, entradasResponse, despesasResponse, graficosResponse };
+    },
+    placeholderData: {
+      vendasResponse: emptyVendas,
+      entradasResponse: emptyEntradas,
+      despesasResponse: emptyDespesas,
+      graficosResponse: emptyGraficos
+    }
+  });
+
   useEffect(() => {
-    carregarDados();
-  }, [filtros, paginaVendas, paginaEntradas]);
+    const data = financeiroQuery.data;
+    if (!data) return;
+    setVendas(data.vendasResponse);
+    setEntradas(data.entradasResponse);
+    setDespesas({ ...data.despesasResponse, categorias: normalizarCategorias([...emptyDespesas.categorias, ...data.despesasResponse.categorias]) });
+    setGraficos(data.graficosResponse);
+  }, [financeiroQuery.data]);
 
-  async function carregarDados() {
-    const [vendasResponse, entradasResponse, despesasResponse, graficosResponse] = await Promise.all([
-      obterVendasFinanceiro({ ...filtros, pagina: paginaVendas, tamanhoPagina: 10 }).catch(() => emptyVendas),
-      obterEntradasFinanceiro({ ...filtros, pagina: paginaEntradas, tamanhoPagina: 10 }).catch(() => emptyEntradas),
-      obterDespesasFinanceiro(filtros).catch(() => emptyDespesas),
-      obterGraficosFinanceiro({ ano, mes }).catch(() => emptyGraficos)
-    ]);
-    setVendas(vendasResponse);
-    setEntradas(entradasResponse);
-    setDespesas({ ...despesasResponse, categorias: normalizarCategorias([...emptyDespesas.categorias, ...despesasResponse.categorias]) });
-    setGraficos(graficosResponse);
-  }
+  const despesaMutation = useMutation({
+    mutationFn: async () => {
+      const categoria = form.categoria === "__nova" ? form.novaCategoria.trim() : form.categoria;
+      const valor = parseCurrency(form.valor);
+      if (!categoria || !form.descricao.trim() || valor <= 0) throw new Error("Informe categoria, descricao e valor da despesa.");
+      if (grupoEditando) {
+        await atualizarDespesa(grupoEditando.id, { categoria, descricao: form.descricao.trim(), valor, vencimento: form.vencimento, observacao: form.observacao.trim() || null });
+        return "editada" as const;
+      }
+      await criarDespesa({ usuarioId, categoria, descricao: form.descricao.trim(), valor, vencimento: form.vencimento, condicaoPagamento: form.condicaoPagamento, quantidadeParcelas: form.condicaoPagamento === "PARCELADO" ? Number(form.quantidadeParcelas || 1) : 1, observacao: form.observacao.trim() || null, jaPago: form.jaPago });
+      return "criada" as const;
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["financeiro"] });
+      setGrupoEditando(null);
+      setForm(emptyForm);
+      setMensagem(result === "editada" ? "Despesa atualizada com sucesso." : "Despesa cadastrada com sucesso.");
+    },
+    onError: (error) => setMensagem(error instanceof Error ? error.message : "Nao foi possivel cadastrar a despesa.")
+  });
 
+  const pagarDespesaMutation = useMutation({
+    mutationFn: pagarDespesa,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["financeiro"] });
+      setMensagem("Despesa marcada como paga.");
+    },
+    onError: (error) => setMensagem(error instanceof Error ? error.message : "Nao foi possivel marcar a despesa como paga.")
+  });
   function limparFiltro() {
     setAno(anoAtual);
     setMes(mesAtual);
@@ -160,57 +215,16 @@ export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
     setStatus("");
   }
 
-  async function salvarDespesa() {
-    const categoria = form.categoria === "__nova" ? form.novaCategoria.trim() : form.categoria;
-    const valor = parseCurrency(form.valor);
-    if (!categoria || !form.descricao.trim() || valor <= 0) {
-      setMensagem("Informe categoria, descrição e valor da despesa.");
-      return;
-    }
-
+  function salvarDespesa() {
     setMensagem(null);
-    setIsSaving(true);
-    try {
-      if (grupoEditando) {
-        await atualizarDespesa(grupoEditando.id, {
-          categoria,
-          descricao: form.descricao.trim(),
-          valor,
-          vencimento: form.vencimento,
-          observacao: form.observacao.trim() || null
-        });
-        setGrupoEditando(null);
-        setForm(emptyForm);
-        setMensagem("Despesa atualizada com sucesso.");
-        await carregarDados();
-        return;
-      }
-
-      await criarDespesa({
-        usuarioId,
-        categoria,
-        descricao: form.descricao.trim(),
-        valor,
-        vencimento: form.vencimento,
-        condicaoPagamento: form.condicaoPagamento,
-        quantidadeParcelas: form.condicaoPagamento === "PARCELADO" ? Number(form.quantidadeParcelas || 1) : 1,
-        observacao: form.observacao.trim() || null,
-        jaPago: form.jaPago
-      });
-      setForm(emptyForm);
-      setMensagem("Despesa cadastrada com sucesso.");
-      await carregarDados();
-    } catch {
-      setMensagem("Não foi possível cadastrar a despesa.");
-    } finally {
-      setIsSaving(false);
-    }
+    despesaMutation.mutate();
   }
 
-  async function marcarPaga(id: number) {
-    await pagarDespesa(id).catch(() => setMensagem("Não foi possível marcar a despesa como paga."));
-    await carregarDados();
+  function marcarPaga(id: number) {
+    pagarDespesaMutation.mutate(id);
   }
+
+  const isSavingMutation = despesaMutation.isPending || pagarDespesaMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -227,7 +241,7 @@ export function FinanceiroPage({ usuarioId }: FinanceiroPageProps) {
 
       {tab === "Vendas" && <Vendas data={vendas} onPageChange={setPaginaVendas} />}
       {tab === "Entradas" && <Entradas data={entradas} onPageChange={setPaginaEntradas} />}
-      {tab === "Despesas" && <Despesas data={despesas} form={form} setForm={setForm} expanded={expanded} setExpanded={setExpanded} grupoEditando={grupoEditando} setGrupoEditando={setGrupoEditando} onSave={salvarDespesa} onPay={marcarPaga} isSaving={isSaving} />}
+      {tab === "Despesas" && <Despesas data={despesas} form={form} setForm={setForm} expanded={expanded} setExpanded={setExpanded} grupoEditando={grupoEditando} setGrupoEditando={setGrupoEditando} onSave={salvarDespesa} onPay={marcarPaga} isSaving={isSaving || isSavingMutation} />}
       {tab === "Gráficos" && <Graficos data={graficos} />}
       {tab === "Clientes" && <Clientes data={graficos} />}
     </div>
@@ -453,18 +467,151 @@ function FragmentGroup({ grupo, expanded, onToggle, onEdit, onPay }: { grupo: De
   );
 }
 
+const CHART_COLORS = {
+  receita: "#10b981",
+  despesa: "#f43f5e",
+  status: ["#3b82f6", "#10b981", "#f43f5e", "#f59e0b"],
+  usuarios: ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ddd6fe", "#ede9fe", "#f5f3ff", "#818cf8", "#4f46e5", "#4338ca"]
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  ABERTO: "Aberto",
+  FINALIZADO: "Finalizado",
+  CANCELADO: "Cancelado",
+  ORCADO: "Orçado"
+};
+
+function currencyTick(value: number) {
+  if (value >= 1000) return `R$ ${(value / 1000).toFixed(0)}k`;
+  return `R$ ${value}`;
+}
+
 function Graficos({ data }: { data: GraficosFinanceiro }) {
-  return <div className="space-y-6"><div className="grid gap-6 xl:grid-cols-2"><BarCard title="Receita anual" data={data.receitaAnual} labelKey="mes" /><BarCard title="Despesas anual" data={data.despesaAnual} labelKey="mes" /></div><div className="grid gap-6 xl:grid-cols-2"><BarCard title="Despesas do mês" data={data.despesasMes} labelKey="categoria" /><Clientes data={data} /></div></div>;
-}
+  const receitaData = data.receitaAnual.map((item) => ({
+    mes: meses[item.mes - 1]?.[1]?.slice(0, 3) ?? String(item.mes),
+    receita: item.valor
+  }));
 
-function Clientes({ data }: { data: GraficosFinanceiro }) {
-  const total = data.clientesMes.reduce((sum, item) => sum + item.valor, 0);
-  return <Card><CardHeader><CardTitle>Top clientes do mês</CardTitle></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead>Valor</TableHead><TableHead>%</TableHead></TableRow></TableHeader><TableBody>{data.clientesMes.map((item) => <TableRow key={item.cliente}><TableCell>{item.cliente}</TableCell><TableCell>{formatCurrency(item.valor)}</TableCell><TableCell>{total > 0 ? Math.round((item.valor / total) * 100) : 0}%</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>;
-}
+  const despesaData = data.despesaAnual.map((item) => ({
+    mes: meses[item.mes - 1]?.[1]?.slice(0, 3) ?? String(item.mes),
+    despesa: item.valor
+  }));
 
-function BarCard({ title, data, labelKey }: { title: string; data: { mes?: number; valor: number; categoria?: string }[]; labelKey: "mes" | "categoria" }) {
-  const max = Math.max(...data.map((item) => item.valor), 1);
-  return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent className="space-y-3">{data.length === 0 && <p className="text-sm text-muted-foreground">Sem dados para exibir.</p>}{data.map((item, index) => { const pct = Math.max(4, (item.valor / max) * 100); return <div key={`${title}-${index}`} className="space-y-1"><div className="flex justify-between text-xs font-bold"><span>{labelKey === "mes" ? meses[(item.mes ?? 1) - 1]?.[1] : item.categoria}</span><span>{formatCurrency(item.valor)}</span></div><div className="h-3 rounded-full bg-muted"><div className="h-3 rounded-full bg-primary" style={{ width: `${pct}%` }} /></div></div>; })}</CardContent></Card>;
+  const despesasMesData = data.despesasMes.map((item) => ({
+    name: item.categoria ?? "",
+    value: item.valor
+  }));
+
+  const statusData = (data.pedidosPorStatus ?? []).map((item) => ({
+    name: STATUS_LABELS[item.status] ?? item.status,
+    value: item.quantidade
+  }));
+
+  const usuariosData = (data.usuariosRanking ?? []).map((item) => ({
+    usuario: item.usuario,
+    pedidos: item.quantidadePedidos
+  }));
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Receita anual</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={receitaData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={currencyTick} tick={{ fontSize: 11 }} width={64} />
+                <Tooltip formatter={(value: number) => [formatCurrency(value), "Receita"]} />
+                <Bar dataKey="receita" fill={CHART_COLORS.receita} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Despesas anuais</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={despesaData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={currencyTick} tick={{ fontSize: 11 }} width={64} />
+                <Tooltip formatter={(value: number) => [formatCurrency(value), "Despesa"]} />
+                <Bar dataKey="despesa" fill={CHART_COLORS.despesa} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle>Despesas por categoria (mês)</CardTitle></CardHeader>
+          <CardContent>
+            {despesasMesData.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Sem despesas registradas neste mês.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={despesasMesData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+                    {despesasMesData.map((_, index) => (
+                      <Cell key={index} fill={CHART_COLORS.status[index % CHART_COLORS.status.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Pedidos por status (mês)</CardTitle></CardHeader>
+          <CardContent>
+            {statusData.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Nenhum pedido registrado neste mês.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
+                    {statusData.map((_, index) => (
+                      <Cell key={index} fill={CHART_COLORS.status[index % CHART_COLORS.status.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {usuariosData.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Pedidos por atendente (mês)</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={Math.max(180, usuariosData.length * 44)}>
+              <BarChart layout="vertical" data={usuariosData} margin={{ top: 4, right: 40, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="usuario" tick={{ fontSize: 12 }} width={110} />
+                <Tooltip formatter={(value: number) => [value, "Pedidos"]} />
+                <Bar dataKey="pedidos" radius={[0, 4, 4, 0]}>
+                  {usuariosData.map((_, index) => (
+                    <Cell key={index} fill={CHART_COLORS.usuarios[index % CHART_COLORS.usuarios.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label><span className="field-label">{label}</span><div className="mt-2">{children}</div></label>; }
@@ -505,3 +652,7 @@ function formatCategoria(value: string) {
 
 function buildParcelasPreview(total: number, vencimento: string, quantidade: number) { if (total <= 0 || !vencimento) return []; const qtd = Math.max(1, quantidade); const parcela = Math.round((total / qtd) * 100) / 100; let restante = total; return Array.from({ length: qtd }, (_, index) => { const valor = index === qtd - 1 ? restante : parcela; restante -= valor; return { numero: index + 1, valor, vencimento: addMonths(vencimento, index) }; }); }
 function addMonths(value: string, months: number) { const date = new Date(`${value}T00:00:00`); date.setMonth(date.getMonth() + months); return date.toISOString().slice(0, 10); }
+
+
+
+

@@ -59,6 +59,7 @@ export type MovimentacaoPayload = {
   quantidade: number;
   custoUnitario: number | null;
   observacao: string | null;
+  nomeProduto?: string | null;
 };
 
 export type ResultadoPaginado<T> = { itens: T[]; total: number; pagina: number; tamanhoPagina: number; totalPaginas: number };

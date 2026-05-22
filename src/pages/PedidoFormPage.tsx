@@ -1,5 +1,6 @@
-import { AlertTriangle, Ban, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
+﻿import { AlertTriangle, Ban, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ type ItemPedido = {
 type CondicaoPagamento = "Pago" | "Pagar na Entrega" | "Parcelado";
 
 export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | null; usuarioId: number }) {
+  const queryClient = useQueryClient();
   const [clienteId, setClienteId] = useState(0);
   const [cliente, setCliente] = useState(pedido?.cliente ?? "");
   const [empresa, setEmpresa] = useState("");
@@ -102,15 +104,41 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     Boolean(novaFormaDevolucao) &&
     novaObservacaoEstorno.trim().length >= 10;
 
-  useEffect(() => {
-    if (!pedido?.id) {
-      return;
-    }
+  const pedidoDetalheQuery = useQuery({
+    queryKey: ["pedidos", "detalhe", pedido?.id],
+    queryFn: () => obterPedido(pedido!.id),
+    enabled: Boolean(pedido?.id)
+  });
 
-    obterPedido(pedido.id)
-      .then(preencherComDetalhe)
-      .catch(() => setStatusMensagem("Não foi possível carregar os detalhes do pedido."));
-  }, [pedido?.id]);
+  const criarPedidoMutation = useMutation({ mutationFn: criarPedido });
+  const criarOrcamentoMutation = useMutation({ mutationFn: criarOrcamento });
+  const atualizarPedidoMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: PedidoPayload }) => atualizarPedido(id, payload)
+  });
+  const atualizarOrcamentoMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: PedidoPayload }) => atualizarOrcamento(id, payload)
+  });
+  const cancelarPedidoMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Parameters<typeof cancelarPedido>[1] }) => cancelarPedido(id, payload)
+  });
+  const estornarPedidoMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Parameters<typeof estornarPedido>[1] }) => estornarPedido(id, payload)
+  });
+  const finalizarPedidoMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Parameters<typeof finalizarPedido>[1] }) => finalizarPedido(id, payload)
+  });
+
+  useEffect(() => {
+    if (pedidoDetalheQuery.data) {
+      preencherComDetalhe(pedidoDetalheQuery.data);
+    }
+  }, [pedidoDetalheQuery.data]);
+
+  useEffect(() => {
+    if (pedidoDetalheQuery.error) {
+      setStatusMensagem("Nao foi possivel carregar os detalhes do pedido.");
+    }
+  }, [pedidoDetalheQuery.error]);
 
   function updateItem(id: number, field: keyof ItemPedido, value: string) {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
@@ -168,17 +196,20 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
         }
 
         if (tipo === "Pedido") {
-          await atualizarPedido(pedido.id, payload);
+          await atualizarPedidoMutation.mutateAsync({ id: pedido.id, payload });
         } else {
-          await atualizarOrcamento(pedido.id, payload);
+          await atualizarOrcamentoMutation.mutateAsync({ id: pedido.id, payload });
         }
+        await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
         setStatusMensagem("Registro atualizado com sucesso.");
       } else if (tipo === "Pedido") {
-        await criarPedido(payload);
+        await criarPedidoMutation.mutateAsync(payload);
+        await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
         setStatusMensagem("Pedido criado com sucesso.");
         limparFormulario();
       } else {
-        await criarOrcamento(payload);
+        await criarOrcamentoMutation.mutateAsync(payload);
+        await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
         setStatusMensagem("Orçamento criado com sucesso.");
         limparFormulario();
       }
@@ -203,12 +234,15 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setIsCanceling(true);
 
     try {
-      await cancelarPedido(pedido.id, {
+      await cancelarPedidoMutation.mutateAsync({
+        id: pedido.id,
+        payload: {
         usuarioId,
         observacao: cancelReason,
         valorDevolvido: valorDevolvidoNumero,
         formaDevolucao: valorDevolvidoNumero > 0 ? formaDevolucao : null,
         observacaoEstorno: observacaoEstorno.trim() || null
+        }
       });
       setStatusAtual("Cancelado");
       setValorEstornado(valorDevolvidoNumero);
@@ -217,6 +251,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       setCancelReason("");
       setValorDevolvido(formatCurrency(0));
       setObservacaoEstorno("");
+      await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
       setStatusMensagem(`${tipoOriginal} cancelado com sucesso.`);
     } catch (error) {
       setStatusMensagem(error instanceof ApiError ? error.message : "Não foi possível cancelar este registro.");
@@ -239,11 +274,14 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setIsEstornando(true);
 
     try {
-      await estornarPedido(pedido.id, {
+      await estornarPedidoMutation.mutateAsync({
+        id: pedido.id,
+        payload: {
         usuarioId,
         valorDevolvido: novoValorDevolvidoNumero,
         formaDevolucao: novaFormaDevolucao,
         observacao: novaObservacaoEstorno.trim()
+        }
       });
       setValorEstornado((current) => current + novoValorDevolvidoNumero);
       setObservacaoEstornoRegistrada((current) =>
@@ -253,6 +291,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       setNovoValorDevolvido(formatCurrency(0));
       setNovaFormaDevolucao("PIX");
       setNovaObservacaoEstorno("");
+      await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
       setStatusMensagem("Devolucao complementar registrada com sucesso.");
     } catch (error) {
       setStatusMensagem(error instanceof ApiError ? error.message : "Nao foi possivel registrar a devolucao complementar.");
@@ -270,7 +309,9 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setIsFinalizing(true);
 
     try {
-      await finalizarPedido(pedido.id, {
+      await finalizarPedidoMutation.mutateAsync({
+        id: pedido.id,
+        payload: {
         usuarioId,
         observacao:
           saldoDevedor > 0
@@ -278,11 +319,13 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
             : "Produto entregue e pagamento confirmado.",
         receberSaldo: saldoDevedor > 0,
         formaPagamento: saldoDevedor > 0 ? formaPagamentoFinalizacao : null
+        }
       });
       setStatusAtual("Finalizado");
       setValorPagoRegistrado((current) => current + saldoDevedor);
       setSaldoDevedor(0);
       setFinalizarModalOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
       setStatusMensagem("Pedido finalizado com sucesso.");
     } catch (error) {
       setStatusMensagem(error instanceof ApiError ? error.message : "Não foi possível finalizar este pedido.");
@@ -806,5 +849,7 @@ function Select({
     </select>
   );
 }
+
+
 
 
