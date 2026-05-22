@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertTriangle, Ban, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { useController, useFieldArray, useForm, type Control } from "react-hook-form";
+import { useController, useFieldArray, useForm, useWatch, type Control } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -162,7 +162,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const percentualEntrada = watch("percentualEntrada");
   const dataPedido = watch("dataPedido");
   const dataEntrega = watch("dataEntrega");
-  const watchedItems = watch("items");
+  const watchedItems = useWatch({ control, name: "items" }) as PedidoFormData["items"];
 
   const totalGeral = useMemo(() => watchedItems.reduce((sum, item) => sum + totalItem(item), 0), [watchedItems]);
   const parcelas = buildParcelas(condicaoPagamento, totalGeral, dataPedido, dataEntrega, Number(percentualEntrada || 0));
