@@ -1,6 +1,9 @@
-﻿import { AlertTriangle, Ban, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { AlertTriangle, Ban, CheckCircle2, Plus, Save, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,37 +25,50 @@ import {
 import { ApiError } from "@/services/api";
 import { formatCurrency, formatStatusPedido, formatTipoPedido, maskCpfCnpj, maskCurrency, maskPhone, parseCurrency } from "@/utils/formatters";
 
-type ItemPedido = {
-  id: number;
-  quantidade: string;
-  tamanho: string;
-  descricao: string;
-  precoUnitario: string;
-};
+const itemSchema = z.object({
+  quantidade: z.string(),
+  tamanho: z.string(),
+  descricao: z.string(),
+  precoUnitario: z.string()
+});
 
+const pedidoSchema = z.object({
+  cliente: z.string().min(1, "Informe o nome do cliente"),
+  empresa: z.string(),
+  cpfCnpj: z.string(),
+  telefone: z.string(),
+  endereco: z.string(),
+  cidade: z.string(),
+  tipo: z.enum(["Pedido", "Orçamento"]),
+  dataPedido: z.string().min(1, "Informe a data do pedido"),
+  dataEntrega: z.string(),
+  formaPagamento: z.string(),
+  condicaoPagamento: z.enum(["Pago", "Pagar na Entrega", "Parcelado"]),
+  percentualEntrada: z.string(),
+  frente: z.string(),
+  fundo: z.string(),
+  observacao: z.string(),
+  outrosItens: z.string(),
+  items: z.array(itemSchema)
+});
+
+type PedidoFormData = z.infer<typeof pedidoSchema>;
 type CondicaoPagamento = "Pago" | "Pagar na Entrega" | "Parcelado";
 
 export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | null; usuarioId: number }) {
   const queryClient = useQueryClient();
+
+  // Server-sourced state
   const [clienteId, setClienteId] = useState(0);
-  const [cliente, setCliente] = useState(pedido?.cliente ?? "");
-  const [empresa, setEmpresa] = useState("");
-  const [cpfCnpj, setCpfCnpj] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [endereco, setEndereco] = useState("");
-  const [cidade, setCidade] = useState("Alagoinhas");
-  const [tipo, setTipo] = useState(pedido ? formatTipoPedido(pedido.tipo) : "Pedido");
   const [tipoOriginal, setTipoOriginal] = useState(pedido ? formatTipoPedido(pedido.tipo) : "Pedido");
   const [statusAtual, setStatusAtual] = useState(pedido ? formatStatusPedido(pedido.status) : "");
-  const [dataPedido, setDataPedido] = useState(pedido?.dataPedido ?? new Date().toISOString().slice(0, 10));
-  const [dataEntrega, setDataEntrega] = useState(pedido?.dataEntrega ?? "");
-  const [formaPagamento, setFormaPagamento] = useState("PIX");
-  const [condicaoPagamento, setCondicaoPagamento] = useState<CondicaoPagamento>("Parcelado");
-  const [percentualEntrada, setPercentualEntrada] = useState("50");
-  const [observacao, setObservacao] = useState("");
-  const [frente, setFrente] = useState("");
-  const [fundo, setFundo] = useState("");
-  const [outrosItens, setOutrosItens] = useState("");
+  const [saldoDevedor, setSaldoDevedor] = useState(pedido?.saldoDevedor ?? 0);
+  const [valorPagoRegistrado, setValorPagoRegistrado] = useState(pedido?.valorPago ?? 0);
+  const [valorEstornado, setValorEstornado] = useState(0);
+  const [observacaoEstornoRegistrada, setObservacaoEstornoRegistrada] = useState("");
+  const [pagamentos, setPagamentos] = useState<PedidoDetalhe["pagamentos"]>([]);
+
+  // UI state
   const [statusMensagem, setStatusMensagem] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -68,23 +84,47 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const [isEstornando, setIsEstornando] = useState(false);
   const [finalizarModalOpen, setFinalizarModalOpen] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
-  const [saldoDevedor, setSaldoDevedor] = useState(pedido?.saldoDevedor ?? 0);
-  const [valorPagoRegistrado, setValorPagoRegistrado] = useState(pedido?.valorPago ?? 0);
-  const [valorEstornado, setValorEstornado] = useState(0);
-  const [observacaoEstornoRegistrada, setObservacaoEstornoRegistrada] = useState("");
-  const [pagamentos, setPagamentos] = useState<PedidoDetalhe["pagamentos"]>([]);
   const [formaPagamentoFinalizacao, setFormaPagamentoFinalizacao] = useState("PIX");
-  const [items, setItems] = useState<ItemPedido[]>([
-    {
-      id: 1,
-      quantidade: pedido ? "1" : "",
-      tamanho: "",
-      descricao: pedido ? `Pedido ${pedido.numero} - ${pedido.cliente}` : "",
-      precoUnitario: pedido ? formatCurrency(pedido.total) : formatCurrency(0)
-    }
-  ]);
 
-  const totalGeral = useMemo(() => items.reduce((sum, item) => sum + totalItem(item), 0), [items]);
+  // Form
+  const { watch, setValue, reset, control, handleSubmit, formState: { errors } } = useForm<PedidoFormData>({
+    resolver: zodResolver(pedidoSchema),
+    defaultValues: {
+      cliente: pedido?.cliente ?? "",
+      empresa: "",
+      cpfCnpj: "",
+      telefone: "",
+      endereco: "",
+      cidade: "Alagoinhas",
+      tipo: (pedido ? formatTipoPedido(pedido.tipo) : "Pedido") as "Pedido" | "Orçamento",
+      dataPedido: pedido?.dataPedido ?? new Date().toISOString().slice(0, 10),
+      dataEntrega: pedido?.dataEntrega ?? "",
+      formaPagamento: "PIX",
+      condicaoPagamento: "Parcelado",
+      percentualEntrada: "50",
+      frente: "",
+      fundo: "",
+      observacao: "",
+      outrosItens: "",
+      items: [{
+        quantidade: pedido ? "1" : "",
+        tamanho: "",
+        descricao: pedido ? `Pedido ${pedido.numero} - ${pedido.cliente}` : "",
+        precoUnitario: pedido ? formatCurrency(pedido.total) : formatCurrency(0)
+      }]
+    }
+  });
+
+  const { fields, append, remove } = useFieldArray({ control, name: "items" });
+
+  const tipo = watch("tipo");
+  const condicaoPagamento = watch("condicaoPagamento") as CondicaoPagamento;
+  const percentualEntrada = watch("percentualEntrada");
+  const dataPedido = watch("dataPedido");
+  const dataEntrega = watch("dataEntrega");
+  const watchedItems = watch("items");
+
+  const totalGeral = useMemo(() => watchedItems.reduce((sum, item) => sum + totalItem(item), 0), [watchedItems]);
   const parcelas = buildParcelas(condicaoPagamento, totalGeral, dataPedido, dataEntrega, Number(percentualEntrada || 0));
   const tipoBloqueado = Boolean(pedido) && tipoOriginal === "Pedido";
   const cancelReasonValido = cancelReason.trim().length >= 10;
@@ -140,44 +180,32 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     }
   }, [pedidoDetalheQuery.error]);
 
-  function updateItem(id: number, field: keyof ItemPedido, value: string) {
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
-  }
-
-  function addItem() {
-    setItems((current) => [...current, { id: Date.now(), quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]);
-  }
-
-  function removeItem(id: number) {
-    setItems((current) => (current.length === 1 ? current : current.filter((item) => item.id !== id)));
-  }
-
-  async function salvar() {
+  async function salvar(data: PedidoFormData) {
     setStatusMensagem(null);
     setIsSaving(true);
 
     const payload: PedidoPayload = {
       numero: pedido?.numero ?? String(Date.now()).slice(-6).padStart(6, "0"),
       clienteId,
-      clienteNome: cliente,
-      empresa: empresa || null,
-      cpfCnpj: cpfCnpj || null,
-      telefone: telefone || null,
-      endereco: endereco || null,
-      cidade: cidade || null,
+      clienteNome: data.cliente,
+      empresa: data.empresa || null,
+      cpfCnpj: data.cpfCnpj || null,
+      telefone: data.telefone || null,
+      endereco: data.endereco || null,
+      cidade: data.cidade || null,
       usuarioId,
-      dataPedido,
-      dataEntrega: dataEntrega || null,
+      dataPedido: data.dataPedido,
+      dataEntrega: data.dataEntrega || null,
       vendedor: null,
-      formaPagamento,
-      condicaoPagamento,
-      frente: frente || null,
-      fundo: fundo || null,
-      observacao: observacao || null,
-      outrosItens: outrosItens || null,
+      formaPagamento: data.formaPagamento,
+      condicaoPagamento: data.condicaoPagamento,
+      frente: data.frente || null,
+      fundo: data.fundo || null,
+      observacao: data.observacao || null,
+      outrosItens: data.outrosItens || null,
       total: totalGeral,
       valorPago: pedido ? valorPagoRegistrado : parcelas[0]?.valor ?? 0,
-      itens: items
+      itens: data.items
         .filter((item) => item.descricao.trim() || Number(item.quantidade || 0) > 0 || item.tamanho.trim())
         .map((item) => ({
           descricao: item.descricao.trim(),
@@ -190,19 +218,19 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
 
     try {
       if (pedido) {
-        if (tipoOriginal === "Pedido" && tipo === "Orçamento") {
+        if (tipoOriginal === "Pedido" && data.tipo === "Orçamento") {
           setStatusMensagem("Não é permitido transformar um pedido em orçamento. Se o cliente desistiu, use a opção Cancelar.");
           return;
         }
 
-        if (tipo === "Pedido") {
+        if (data.tipo === "Pedido") {
           await atualizarPedidoMutation.mutateAsync({ id: pedido.id, payload });
         } else {
           await atualizarOrcamentoMutation.mutateAsync({ id: pedido.id, payload });
         }
         await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
         setStatusMensagem("Registro atualizado com sucesso.");
-      } else if (tipo === "Pedido") {
+      } else if (data.tipo === "Pedido") {
         await criarPedidoMutation.mutateAsync(payload);
         await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
         setStatusMensagem("Pedido criado com sucesso.");
@@ -335,14 +363,26 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   }
 
   function limparFormulario() {
-    setCliente("");
+    reset({
+      cliente: "",
+      empresa: "",
+      cpfCnpj: "",
+      telefone: "",
+      endereco: "",
+      cidade: "Alagoinhas",
+      tipo: "Pedido",
+      dataPedido: new Date().toISOString().slice(0, 10),
+      dataEntrega: "",
+      formaPagamento: "PIX",
+      condicaoPagamento: "Parcelado",
+      percentualEntrada: "50",
+      frente: "",
+      fundo: "",
+      observacao: "",
+      outrosItens: "",
+      items: [{ quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]
+    });
     setClienteId(0);
-    setEmpresa("");
-    setCpfCnpj("");
-    setTelefone("");
-    setEndereco("");
-    setCidade("Alagoinhas");
-    setTipo("Pedido");
     setTipoOriginal("Pedido");
     setStatusAtual("");
     setSaldoDevedor(0);
@@ -350,28 +390,11 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setValorEstornado(0);
     setObservacaoEstornoRegistrada("");
     setPagamentos([]);
-    setDataPedido(new Date().toISOString().slice(0, 10));
-    setDataEntrega("");
-    setFormaPagamento("PIX");
     setFormaPagamentoFinalizacao("PIX");
-    setCondicaoPagamento("Parcelado");
-    setPercentualEntrada("50");
-    setObservacao("");
-    setFrente("");
-    setFundo("");
-    setOutrosItens("");
-    setItems([{ id: Date.now(), quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]);
   }
 
   function preencherComDetalhe(detalhe: PedidoDetalhe) {
     setClienteId(detalhe.clienteId);
-    setCliente(detalhe.cliente);
-    setEmpresa(detalhe.empresa ?? "");
-    setCpfCnpj(maskCpfCnpj(detalhe.cpfCnpj ?? ""));
-    setTelefone(maskPhone(detalhe.telefone ?? ""));
-    setEndereco(detalhe.endereco ?? "");
-    setCidade(detalhe.cidade ?? "Alagoinhas");
-    setTipo(formatTipoPedido(detalhe.tipo));
     setTipoOriginal(formatTipoPedido(detalhe.tipo));
     setStatusAtual(formatStatusPedido(detalhe.status));
     setSaldoDevedor(detalhe.saldoDevedor);
@@ -379,27 +402,33 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setValorEstornado(detalhe.valorEstornado ?? 0);
     setObservacaoEstornoRegistrada(detalhe.observacaoEstorno ?? "");
     setPagamentos(detalhe.pagamentos ?? []);
-    setDataPedido(detalhe.dataPedido);
-    setDataEntrega(detalhe.dataEntrega ?? "");
-    setFormaPagamento(toUiFormaPagamento(detalhe.formaPagamento));
     setFormaPagamentoFinalizacao(toUiFormaPagamento(detalhe.formaPagamento));
-    setCondicaoPagamento(toUiCondicaoPagamento(detalhe.condicaoPagamento));
-    setObservacao(detalhe.observacao ?? "");
-    setFrente(detalhe.frente ?? "");
-    setFundo(detalhe.fundo ?? "");
-    setOutrosItens(detalhe.outrosItens ?? "");
-    setPercentualEntrada(detalhe.total > 0 ? String(Math.round((detalhe.valorPago / detalhe.total) * 100)) : "50");
-    setItems(
-      detalhe.itens?.length
+    reset({
+      cliente: detalhe.cliente,
+      empresa: detalhe.empresa ?? "",
+      cpfCnpj: maskCpfCnpj(detalhe.cpfCnpj ?? ""),
+      telefone: maskPhone(detalhe.telefone ?? ""),
+      endereco: detalhe.endereco ?? "",
+      cidade: detalhe.cidade ?? "Alagoinhas",
+      tipo: formatTipoPedido(detalhe.tipo) as "Pedido" | "Orçamento",
+      dataPedido: detalhe.dataPedido,
+      dataEntrega: detalhe.dataEntrega ?? "",
+      formaPagamento: toUiFormaPagamento(detalhe.formaPagamento),
+      condicaoPagamento: toUiCondicaoPagamento(detalhe.condicaoPagamento),
+      percentualEntrada: detalhe.total > 0 ? String(Math.round((detalhe.valorPago / detalhe.total) * 100)) : "50",
+      frente: detalhe.frente ?? "",
+      fundo: detalhe.fundo ?? "",
+      observacao: detalhe.observacao ?? "",
+      outrosItens: detalhe.outrosItens ?? "",
+      items: detalhe.itens?.length
         ? detalhe.itens.map((item) => ({
-            id: item.id,
             quantidade: String(item.quantidade),
             tamanho: item.tamanho ?? "",
             descricao: item.descricao,
             precoUnitario: formatCurrency(item.valorUnitario)
           }))
-        : [{ id: Date.now(), quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]
-    );
+        : [{ quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]
+    });
   }
 
   return (
@@ -435,21 +464,24 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
           <CardTitle>Dados do cliente</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-4">
-          <Field label="Cliente" value={cliente} onChange={setCliente} />
-          <Field label="Empresa" value={empresa} onChange={setEmpresa} />
-          <Field label="CPF/CNPJ" value={cpfCnpj} onChange={(value) => setCpfCnpj(maskCpfCnpj(value))} />
-          <Field label="Telefone" value={telefone} onChange={(value) => setTelefone(maskPhone(value))} />
-          <Field className="md:col-span-2" label="Endereço" value={endereco} onChange={setEndereco} />
-          <Field label="Cidade" value={cidade} onChange={setCidade} />
+          <div>
+            <Field label="Cliente" value={watch("cliente")} onChange={(v) => setValue("cliente", v)} />
+            {errors.cliente && <p className="mt-1 text-xs font-semibold text-red-600">{errors.cliente.message}</p>}
+          </div>
+          <Field label="Empresa" value={watch("empresa")} onChange={(v) => setValue("empresa", v)} />
+          <Field label="CPF/CNPJ" value={watch("cpfCnpj")} onChange={(v) => setValue("cpfCnpj", maskCpfCnpj(v))} />
+          <Field label="Telefone" value={watch("telefone")} onChange={(v) => setValue("telefone", maskPhone(v))} />
+          <Field className="md:col-span-2" label="Endereço" value={watch("endereco")} onChange={(v) => setValue("endereco", v)} />
+          <Field label="Cidade" value={watch("cidade")} onChange={(v) => setValue("cidade", v)} />
           <label>
             <span className="field-label">Tipo</span>
-            <Select value={tipo} onChange={setTipo} disabled={tipoBloqueado}>
+            <Select value={tipo} onChange={(v) => setValue("tipo", v as "Pedido" | "Orçamento")} disabled={tipoBloqueado}>
               <option value="Pedido">Pedido</option>
               {!tipoBloqueado && <option value="Orçamento">Orçamento</option>}
             </Select>
           </label>
-          <Field label="Data do pedido" value={dataPedido} onChange={setDataPedido} type="date" />
-          <Field label="Data de entrega" value={dataEntrega} onChange={setDataEntrega} type="date" />
+          <Field label="Data do pedido" value={watch("dataPedido")} onChange={(v) => setValue("dataPedido", v)} type="date" />
+          <Field label="Data de entrega" value={watch("dataEntrega")} onChange={(v) => setValue("dataEntrega", v)} type="date" />
           <p className="md:col-span-4 rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">
             Se salvar como Orçamento, ele aparece na tabela com status Orçado. Ao editar e trocar para Pedido, o orçamento vira pedido. Pedido já aberto não volta para orçamento.
           </p>
@@ -459,20 +491,20 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Itens do pedido</CardTitle>
-          <Button size="sm" onClick={addItem}>
+          <Button size="sm" onClick={() => append({ quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) })}>
             <Plus size={16} />
             Adicionar item
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          {items.map((item) => (
-            <div key={item.id} className="grid gap-3 md:grid-cols-[90px_110px_1fr_160px_160px_48px]">
-              <Field label="Quant." value={item.quantidade} onChange={(value) => updateItem(item.id, "quantidade", value.replace(/\D/g, ""))} />
-              <Field label="Tam." value={item.tamanho} onChange={(value) => updateItem(item.id, "tamanho", value)} />
-              <Field label="Descrição" value={item.descricao} onChange={(value) => updateItem(item.id, "descricao", value)} />
-              <Field label="Preço unitário" value={item.precoUnitario} onChange={(value) => updateItem(item.id, "precoUnitario", maskCurrency(value))} />
-              <Field label="Total" value={formatCurrency(totalItem(item))} onChange={() => undefined} readOnly />
-              <Button className="mt-6" size="icon" variant="outline" onClick={() => removeItem(item.id)} aria-label="Remover item">
+          {fields.map((field, index) => (
+            <div key={field.id} className="grid gap-3 md:grid-cols-[90px_110px_1fr_160px_160px_48px]">
+              <Field label="Quant." value={watchedItems[index]?.quantidade ?? ""} onChange={(v) => setValue(`items.${index}.quantidade`, v.replace(/\D/g, ""))} />
+              <Field label="Tam." value={watchedItems[index]?.tamanho ?? ""} onChange={(v) => setValue(`items.${index}.tamanho`, v)} />
+              <Field label="Descrição" value={watchedItems[index]?.descricao ?? ""} onChange={(v) => setValue(`items.${index}.descricao`, v)} />
+              <Field label="Preço unitário" value={watchedItems[index]?.precoUnitario ?? ""} onChange={(v) => setValue(`items.${index}.precoUnitario`, maskCurrency(v))} />
+              <Field label="Total" value={formatCurrency(totalItem(watchedItems[index] ?? { quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }))} onChange={() => undefined} readOnly />
+              <Button className="mt-6" size="icon" variant="outline" onClick={() => { if (fields.length > 1) remove(index); }} aria-label="Remover item">
                 <Trash2 size={16} />
               </Button>
             </div>
@@ -486,11 +518,11 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
             <CardTitle>Arte e observações</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <TextField label="Frente" value={frente} onChange={setFrente} />
-            <TextField label="Fundo" value={fundo} onChange={setFundo} />
+            <TextField label="Frente" value={watch("frente")} onChange={(v) => setValue("frente", v)} />
+            <TextField label="Fundo" value={watch("fundo")} onChange={(v) => setValue("fundo", v)} />
             <div className="grid gap-4 md:grid-cols-2">
-              <TextField label="Observação" value={observacao} onChange={setObservacao} />
-              <TextField label="Outros itens" value={outrosItens} onChange={setOutrosItens} />
+              <TextField label="Observação" value={watch("observacao")} onChange={(v) => setValue("observacao", v)} />
+              <TextField label="Outros itens" value={watch("outrosItens")} onChange={(v) => setValue("outrosItens", v)} />
             </div>
           </CardContent>
         </Card>
@@ -503,7 +535,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
             <div className="grid gap-3 md:grid-cols-2">
               <label>
                 <span className="field-label">Forma de pagamento</span>
-                <Select value={formaPagamento} onChange={setFormaPagamento}>
+                <Select value={watch("formaPagamento")} onChange={(v) => setValue("formaPagamento", v)}>
                   <option value="PIX">PIX</option>
                   <option value="Dinheiro">Dinheiro</option>
                   <option value="CARTAO_CREDITO">Cartão de crédito</option>
@@ -512,7 +544,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
               </label>
               <label>
                 <span className="field-label">Condição</span>
-                <Select value={condicaoPagamento} onChange={(value) => setCondicaoPagamento(value as CondicaoPagamento)}>
+                <Select value={condicaoPagamento} onChange={(v) => setValue("condicaoPagamento", v as CondicaoPagamento)}>
                   <option value="Pago">Pago</option>
                   <option value="Pagar na Entrega">Pagar na entrega</option>
                   <option value="Parcelado">Parcelado</option>
@@ -555,7 +587,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
                     <Field
                       label="Perc. (%)"
                       value={String(parcela.percentual)}
-                      onChange={(value) => setPercentualEntrada(value.replace(/\D/g, "").slice(0, 3))}
+                      onChange={(v) => setValue("percentualEntrada", v.replace(/\D/g, "").slice(0, 3))}
                       readOnly={condicaoPagamento !== "Parcelado" || parcela.numero === 2}
                     />
                     <Field label="Valor" value={formatCurrency(parcela.valor)} onChange={() => undefined} readOnly />
@@ -577,7 +609,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
               </p>
             )}
 
-            <Button className="w-full" variant="secondary" onClick={salvar} disabled={isSaving || registroEncerrado}>
+            <Button className="w-full" variant="secondary" onClick={handleSubmit(salvar)} disabled={isSaving || registroEncerrado}>
               <Save size={16} />
               {registroEncerrado ? "Edição bloqueada" : isSaving ? "Salvando..." : "Salvar"}
             </Button>
@@ -743,7 +775,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   );
 }
 
-function totalItem(item: ItemPedido) {
+function totalItem(item: { quantidade: string; tamanho: string; descricao: string; precoUnitario: string }) {
   return Number(item.quantidade || 0) * parseCurrency(item.precoUnitario);
 }
 
@@ -849,7 +881,3 @@ function Select({
     </select>
   );
 }
-
-
-
-

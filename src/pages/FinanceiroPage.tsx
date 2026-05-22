@@ -553,16 +553,18 @@ function Graficos({ data }: { data: GraficosFinanceiro }) {
             {despesasMesData.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Sem despesas registradas neste mês.</p>
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie data={despesasMesData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
+              <ResponsiveContainer width="100%" height={Math.max(180, despesasMesData.length * 44)}>
+                <BarChart layout="vertical" data={despesasMesData} margin={{ top: 4, right: 80, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis type="number" tickFormatter={currencyTick} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={100} />
+                  <Tooltip formatter={(value: number) => [formatCurrency(value), "Despesa"]} />
+                  <Bar dataKey="value" fill={CHART_COLORS.despesa} radius={[0, 4, 4, 0]}>
                     {despesasMesData.map((_, index) => (
                       <Cell key={index} fill={CHART_COLORS.status[index % CHART_COLORS.status.length]} />
                     ))}
-                  </Pie>
-                  <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                  <Legend />
-                </PieChart>
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             )}
           </CardContent>
@@ -610,6 +612,39 @@ function Graficos({ data }: { data: GraficosFinanceiro }) {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function Clientes({ data }: { data: GraficosFinanceiro }) {
+  const clientesData = (data.clientesMes ?? [])
+    .map((item) => ({ cliente: item.cliente ?? "", valor: item.valor }))
+    .filter((item) => item.cliente);
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle>Clientes do mês</CardTitle></CardHeader>
+        <CardContent>
+          {clientesData.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma venda registrada para clientes neste período.</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={Math.max(200, clientesData.length * 44)}>
+              <BarChart layout="vertical" data={clientesData} margin={{ top: 4, right: 80, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis type="number" tickFormatter={currencyTick} tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="cliente" tick={{ fontSize: 12 }} width={130} />
+                <Tooltip formatter={(value: number) => [formatCurrency(value), "Total comprado"]} />
+                <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
+                  {clientesData.map((_, index) => (
+                    <Cell key={index} fill={CHART_COLORS.usuarios[index % CHART_COLORS.usuarios.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

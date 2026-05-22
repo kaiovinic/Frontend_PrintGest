@@ -31,6 +31,7 @@ type AppLayoutProps = {
 };
 
 const MENU_COLLAPSED_KEY = "printgest:menuCollapsed";
+const DESKTOP_QUERY = "(min-width: 1024px)";
 
 const navItems = [
   { page: "dashboard" as const, label: "Dashboard", icon: LayoutDashboard, perfis: ["ADMIN", "GERENTE", "OPERACIONAL"] },
@@ -46,10 +47,30 @@ const navItems = [
 export function AppLayout({ page, setPage, canGoBack, onBack, theme, toggleTheme, user, onLogout, children }: AppLayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuCollapsed, setMenuCollapsed] = useState(() => localStorage.getItem(MENU_COLLAPSED_KEY) === "true");
+  const [isMobileMenu, setIsMobileMenu] = useState(getIsMobileMenu);
 
   useEffect(() => {
     localStorage.setItem(MENU_COLLAPSED_KEY, String(menuCollapsed));
   }, [menuCollapsed]);
+
+  useEffect(() => {
+    if (!window.matchMedia) {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia(DESKTOP_QUERY);
+    const syncMenuMode = () => {
+      const nextIsMobile = !mediaQuery.matches;
+      setIsMobileMenu(nextIsMobile);
+      if (!nextIsMobile) {
+        setMenuOpen(false);
+      }
+    };
+
+    syncMenuMode();
+    mediaQuery.addEventListener("change", syncMenuMode);
+    return () => mediaQuery.removeEventListener("change", syncMenuMode);
+  }, []);
 
   function navigate(nextPage: Page) {
     setPage(nextPage);
@@ -58,7 +79,7 @@ export function AppLayout({ page, setPage, canGoBack, onBack, theme, toggleTheme
 
   return (
     <div className={cn("page-shell min-h-screen lg:grid", menuCollapsed ? "lg:grid-cols-[88px_1fr]" : "lg:grid-cols-[260px_1fr]")}>
-      {menuOpen && <button className="fixed inset-0 z-40 bg-slate-950/60 lg:hidden" aria-label="Fechar menu" onClick={() => setMenuOpen(false)} />}
+      {isMobileMenu && menuOpen && <button className="fixed inset-0 z-40 bg-slate-950/60" aria-label="Fechar menu" onClick={() => setMenuOpen(false)} />}
 
       <aside
         className={cn(
@@ -145,4 +166,8 @@ export function AppLayout({ page, setPage, canGoBack, onBack, theme, toggleTheme
       </main>
     </div>
   );
+}
+
+function getIsMobileMenu() {
+  return typeof window !== "undefined" && window.matchMedia ? !window.matchMedia(DESKTOP_QUERY).matches : false;
 }

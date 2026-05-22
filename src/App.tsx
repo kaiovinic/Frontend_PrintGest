@@ -77,7 +77,7 @@ export default function App() {
 
   function handleLogin(authUser: AuthUser) {
     setUser(authUser);
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authUser));
+    sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(authUser));
     setCurrentPage("dashboard");
     localStorage.setItem(PAGE_STORAGE_KEY, "dashboard");
     window.location.hash = "/dashboard";
@@ -89,7 +89,7 @@ export default function App() {
     setCurrentPage("dashboard");
     setHistory([]);
     setSelectedPedido(null);
-    localStorage.removeItem(USER_STORAGE_KEY);
+    sessionStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem(PAGE_STORAGE_KEY);
     sessionStorage.removeItem(PEDIDO_STORAGE_KEY);
     window.location.hash = "";
@@ -126,7 +126,7 @@ export default function App() {
 }
 
 function readJson<T>(key: string): T | null {
-  const storage = key === PEDIDO_STORAGE_KEY ? sessionStorage : localStorage;
+  const storage = key === PAGE_STORAGE_KEY ? localStorage : sessionStorage;
   const value = storage.getItem(key);
   if (!value) {
     return null;
