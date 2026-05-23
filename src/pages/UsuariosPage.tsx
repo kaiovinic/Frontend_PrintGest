@@ -102,7 +102,7 @@ export function UsuariosPage() {
 
   function editarUsuario(usuario: Usuario) {
     setEditando(usuario);
-    form.reset({ nome: usuario.nome, email: usuario.email, telefone: usuario.telefone ?? "", perfil: normalizarPerfil(usuario.perfil) });
+    form.reset({ nome: usuario.nome, email: usuario.email, telefone: maskPhone(usuario.telefone ?? ""), perfil: normalizarPerfil(usuario.perfil) });
     setMensagem(null);
     setFormOpen(true);
   }
@@ -132,7 +132,32 @@ export function UsuariosPage() {
 }
 
 function UsuarioFormCard({ form, perfis, isSaving, onCancel, onSubmit }: { form: UseFormReturn<UsuarioForm>; perfis: string[]; isSaving: boolean; onCancel: () => void; onSubmit: (values: UsuarioForm) => void }) {
-  return <form className="grid gap-4 md:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}><FieldError message={form.formState.errors.nome?.message}><FieldInput label="Nome" register={form.register("nome")} /></FieldError><FieldError message={form.formState.errors.email?.message}><FieldInput label="Email" register={form.register("email")} /></FieldError><FieldError message={form.formState.errors.telefone?.message}><FieldInput label="Telefone" register={form.register("telefone")} /></FieldError><FieldError message={form.formState.errors.perfil?.message}><label><span className="field-label">Perfil</span><select className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring" {...form.register("perfil")}>{perfis.map((perfil) => <option key={perfil} value={perfil}>{formatPerfil(perfil)}</option>)}</select></label></FieldError><div className="flex justify-end gap-3 md:col-span-2"><Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>Cancelar</Button><Button type="submit" disabled={isSaving}>{isSaving ? "Salvando..." : "Salvar"}</Button></div></form>;
+  return <form className="grid gap-4 md:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}><FieldError message={form.formState.errors.nome?.message}><FieldInput label="Nome" register={form.register("nome")} /></FieldError><FieldError message={form.formState.errors.email?.message}><FieldInput label="Email" register={form.register("email")} /></FieldError><FieldError message={form.formState.errors.telefone?.message}><PhoneFieldInput form={form} /></FieldError><FieldError message={form.formState.errors.perfil?.message}><label><span className="field-label">Perfil</span><select className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring" {...form.register("perfil")}>{perfis.map((perfil) => <option key={perfil} value={perfil}>{formatPerfil(perfil)}</option>)}</select></label></FieldError><div className="flex justify-end gap-3 md:col-span-2"><Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>Cancelar</Button><Button type="submit" disabled={isSaving}>{isSaving ? "Salvando..." : "Salvar"}</Button></div></form>;
+}
+
+function maskPhone(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function PhoneFieldInput({ form }: { form: UseFormReturn<UsuarioForm> }) {
+  const value = form.watch("telefone") ?? "";
+  return (
+    <label>
+      <span className="field-label">Telefone</span>
+      <Input
+        className="mt-2"
+        value={value}
+        onChange={(e) => form.setValue("telefone", maskPhone(e.target.value), { shouldValidate: true })}
+        placeholder="(00) 00000-0000"
+        inputMode="numeric"
+      />
+    </label>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label><span className="field-label">{label}</span><div className="mt-2">{children}</div></label>; }
