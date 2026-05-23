@@ -244,7 +244,9 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       observacao: data.observacao || null,
       outrosItens: data.outrosItens || null,
       total: totalGeral,
-      valorPago: pedido ? valorPagoRegistrado : parcelas[0]?.valor ?? 0,
+      valorPago: !pedido || (tipoOriginal === "Orçamento" && data.tipo === "Pedido")
+        ? parcelas[0]?.valor ?? 0
+        : valorPagoRegistrado,
       itens: data.items
         .filter((item) => item.descricao.trim() || Number(item.quantidade || 0) > 0 || item.tamanho.trim())
         .map((item) => ({
@@ -678,7 +680,7 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
               </span>
             </label>
 
-            {valorPagoRegistrado > 0 && (
+            {tipoOriginal === "Pedido" && valorPagoRegistrado > 0 && (
               <div className="mt-5 space-y-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                 <p className="font-semibold">
                   Este pedido possui {formatCurrency(valorPagoRegistrado)} pago. Informe se haverá devolução ao cliente. O valor devolvido será lançado como saída no caixa.
