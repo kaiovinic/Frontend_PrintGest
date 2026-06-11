@@ -1,4 +1,4 @@
-﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -103,7 +103,9 @@ const emptyGraficos: GraficosFinanceiro = {
   receitaAnual: [],
   despesaAnual: [],
   despesasMes: [],
-  clientesMes: []
+  clientesMes: [],
+  pedidosPorStatus: [],
+  usuariosRanking: []
 };
 
 const emptyForm: DespesaForm = {
@@ -488,12 +490,12 @@ function currencyTick(value: number) {
 
 function Graficos({ data }: { data: GraficosFinanceiro }) {
   const receitaData = data.receitaAnual.map((item) => ({
-    mes: meses[item.mes - 1]?.[1]?.slice(0, 3) ?? String(item.mes),
+    mes: item.mes !== undefined ? (meses[item.mes - 1]?.[1]?.slice(0, 3) ?? String(item.mes)) : "",
     receita: item.valor
   }));
 
   const despesaData = data.despesaAnual.map((item) => ({
-    mes: meses[item.mes - 1]?.[1]?.slice(0, 3) ?? String(item.mes),
+    mes: item.mes !== undefined ? (meses[item.mes - 1]?.[1]?.slice(0, 3) ?? String(item.mes)) : "",
     despesa: item.valor
   }));
 
@@ -523,7 +525,7 @@ function Graficos({ data }: { data: GraficosFinanceiro }) {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={currencyTick} tick={{ fontSize: 11 }} width={64} />
-                <Tooltip formatter={(value: number) => [formatCurrency(value), "Receita"]} />
+                <Tooltip formatter={(value: any) => [formatCurrency(value), "Receita"]} />
                 <Bar dataKey="receita" fill={CHART_COLORS.receita} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -538,7 +540,7 @@ function Graficos({ data }: { data: GraficosFinanceiro }) {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={currencyTick} tick={{ fontSize: 11 }} width={64} />
-                <Tooltip formatter={(value: number) => [formatCurrency(value), "Despesa"]} />
+                <Tooltip formatter={(value: any) => [formatCurrency(value), "Despesa"]} />
                 <Bar dataKey="despesa" fill={CHART_COLORS.despesa} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -558,7 +560,7 @@ function Graficos({ data }: { data: GraficosFinanceiro }) {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis type="number" tickFormatter={currencyTick} tick={{ fontSize: 11 }} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={100} />
-                  <Tooltip formatter={(value: number) => [formatCurrency(value), "Despesa"]} />
+                  <Tooltip formatter={(value: any) => [formatCurrency(value), "Despesa"]} />
                   <Bar dataKey="value" fill={CHART_COLORS.despesa} radius={[0, 4, 4, 0]}>
                     {despesasMesData.map((_, index) => (
                       <Cell key={index} fill={CHART_COLORS.status[index % CHART_COLORS.status.length]} />
@@ -601,7 +603,7 @@ function Graficos({ data }: { data: GraficosFinanceiro }) {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
                 <YAxis type="category" dataKey="usuario" tick={{ fontSize: 12 }} width={110} />
-                <Tooltip formatter={(value: number) => [value, "Pedidos"]} />
+                <Tooltip formatter={(value: any) => [value, "Pedidos"]} />
                 <Bar dataKey="pedidos" radius={[0, 4, 4, 0]}>
                   {usuariosData.map((_, index) => (
                     <Cell key={index} fill={CHART_COLORS.usuarios[index % CHART_COLORS.usuarios.length]} />
@@ -634,7 +636,7 @@ function Clientes({ data }: { data: GraficosFinanceiro }) {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis type="number" tickFormatter={currencyTick} tick={{ fontSize: 11 }} />
                 <YAxis type="category" dataKey="cliente" tick={{ fontSize: 12 }} width={130} />
-                <Tooltip formatter={(value: number) => [formatCurrency(value), "Total comprado"]} />
+                <Tooltip formatter={(value: any) => [formatCurrency(value), "Total comprado"]} />
                 <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
                   {clientesData.map((_, index) => (
                     <Cell key={index} fill={CHART_COLORS.usuarios[index % CHART_COLORS.usuarios.length]} />
