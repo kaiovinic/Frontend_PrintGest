@@ -38,7 +38,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     body: options.body ? JSON.stringify(options.body) : undefined
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && !path.startsWith("/auth/")) {
     window.dispatchEvent(new CustomEvent("auth:unauthorized"));
     throw new ApiError("Sessão expirada. Faça login novamente.", 401);
   }

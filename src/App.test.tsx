@@ -1,4 +1,4 @@
-﻿import { render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,7 +10,8 @@ const authResponse = {
   email: "maria@print.com",
   perfil: "GERENTE",
   deveTrocarSenha: false,
-  accessToken: "local-dev-token-1"
+  accessToken: "local-dev-token-1",
+  expiresAt: new Date(Date.now() + 3600_000).toISOString()
 };
 
 const pedidosResponse = [
