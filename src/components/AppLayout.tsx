@@ -144,7 +144,7 @@ export function AppLayout({ page, setPage, canGoBack, onBack, theme, toggleTheme
         </div>
       </aside>
 
-      <main className="min-w-0">
+      <main className="min-w-0 flex flex-col min-h-screen">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b bg-card px-4 py-3 lg:px-5 lg:py-4">
           <div className="flex items-center gap-2">
             <Button className="lg:hidden" size="icon" variant="outline" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
@@ -162,7 +162,10 @@ export function AppLayout({ page, setPage, canGoBack, onBack, theme, toggleTheme
           </div>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
         </header>
-        <div className="mx-auto max-w-[1500px] p-4 sm:p-5 lg:p-8">{children}</div>
+        <div className="mx-auto w-full max-w-[1500px] p-4 sm:p-5 lg:p-8 flex-grow">{children}</div>
+        <footer className="mx-auto w-full max-w-[1500px] px-4 pb-4 sm:px-5 sm:pb-5 lg:px-8 lg:pb-8 text-center text-xs text-muted-foreground border-t pt-4">
+          © 2026 <a href="https://www.linkedin.com/in/kaioviniciussilva/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors font-semibold text-slate-600 dark:text-slate-400">Kaio Vinícius</a> - Todos os direitos reservados.
+        </footer>
       </main>
     </div>
   );
