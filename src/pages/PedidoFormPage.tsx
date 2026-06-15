@@ -626,11 +626,33 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
                     <Field label="#" value={String(parcela.numero)} onChange={() => undefined} readOnly />
                     <Field
                       label="Perc. (%)"
-                      value={String(parcela.percentual)}
-                      onChange={(v) => setValue("percentualEntrada", v.replace(/\D/g, "").slice(0, 3))}
-                      readOnly={condicaoPagamento !== "Parcelado" || parcela.numero === 2}
+                      value={String(parseFloat(Number(parcela.percentual).toFixed(2)))}
+                      onChange={(v) => {
+                        const cleanVal = v.replace(/\D/g, "").slice(0, 3);
+                        const pNum = Number(cleanVal);
+                        if (parcela.numero === 1) {
+                          setValue("percentualEntrada", String(pNum));
+                        } else {
+                          setValue("percentualEntrada", String(Math.max(0, 100 - pNum)));
+                        }
+                      }}
+                      readOnly={condicaoPagamento !== "Parcelado"}
                     />
-                    <Field label="Valor" value={formatCurrency(parcela.valor)} onChange={() => undefined} readOnly />
+                    <Field
+                      label="Valor"
+                      value={formatCurrency(parcela.valor)}
+                      onChange={(v) => {
+                        const parsedVal = parseCurrency(v);
+                        if (parcela.numero === 1) {
+                          const p = totalGeral > 0 ? (parsedVal / totalGeral) * 100 : 0;
+                          setValue("percentualEntrada", String(p));
+                        } else {
+                          const p = totalGeral > 0 ? ((totalGeral - parsedVal) / totalGeral) * 100 : 0;
+                          setValue("percentualEntrada", String(p));
+                        }
+                      }}
+                      readOnly={condicaoPagamento !== "Parcelado"}
+                    />
                     <Field label="Vencimento" type="date" value={parcela.vencimento} onChange={() => undefined} readOnly />
                   </div>
                 ))}

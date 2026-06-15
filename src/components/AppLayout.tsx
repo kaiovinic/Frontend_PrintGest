@@ -164,7 +164,18 @@ export function AppLayout({ page, setPage, canGoBack, onBack, theme, toggleTheme
         </header>
         <div className="mx-auto w-full max-w-[1500px] p-4 sm:p-5 lg:p-8 flex-grow">{children}</div>
         <footer className="mx-auto w-full max-w-[1500px] px-4 pb-4 sm:px-5 sm:pb-5 lg:px-8 lg:pb-8 text-center text-xs text-muted-foreground border-t pt-4">
-          © 2026 <a href="https://www.linkedin.com/in/kaioviniciussilva/" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors font-semibold text-slate-600 dark:text-slate-400">Kaio Vinícius</a> - Todos os direitos reservados.
+          <p>© 2026 Print Impressões - Cara de Urso. Todos os direitos reservados.</p>
+          <p className="mt-1">
+            Criado por{" "}
+            <a
+              href="https://www.linkedin.com/in/kaioviniciussilva/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-primary transition-colors font-semibold text-primary"
+            >
+              KaioDev
+            </a>
+          </p>
         </footer>
       </main>
     </div>
