@@ -123,6 +123,8 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const [finalizarModalOpen, setFinalizarModalOpen] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [formaPagamentoFinalizacao, setFormaPagamentoFinalizacao] = useState("PIX");
+  const [valorRecebidoPedido, setValorRecebidoPedido] = useState("");
+  const [valorRecebidoFinalizacao, setValorRecebidoFinalizacao] = useState("");
 
   // Form
   const { watch, setValue, reset, control, handleSubmit, formState: { errors } } = useForm<PedidoFormData>({
@@ -162,10 +164,23 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const percentualEntrada = watch("percentualEntrada");
   const dataPedido = watch("dataPedido");
   const dataEntrega = watch("dataEntrega");
+  const formaPagamento = watch("formaPagamento");
   const watchedItems = useWatch({ control, name: "items" }) as PedidoFormData["items"];
 
   const totalGeral = useMemo(() => watchedItems.reduce((sum, item) => sum + totalItem(item), 0), [watchedItems]);
   const parcelas = buildParcelas(condicaoPagamento, totalGeral, dataPedido, dataEntrega, Number(percentualEntrada || 0));
+
+  const valorAPagar = condicaoPagamento === "Pago" 
+    ? totalGeral 
+    : condicaoPagamento === "Parcelado" 
+      ? (parcelas[0]?.valor ?? 0) 
+      : 0;
+  const valorRecebidoPedidoNum = parseCurrency(valorRecebidoPedido);
+  const trocoPedido = Math.max(0, valorRecebidoPedidoNum - valorAPagar);
+
+  const valorRecebidoFinalizacaoNum = parseCurrency(valorRecebidoFinalizacao);
+  const trocoFinalizacao = Math.max(0, valorRecebidoFinalizacaoNum - saldoDevedor);
+
   const tipoBloqueado = Boolean(pedido) && tipoOriginal === "Pedido";
   const cancelReasonValido = cancelReason.trim().length >= 10;
   const valorDevolvidoNumero = parseCurrency(valorDevolvido);
@@ -434,6 +449,8 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setObservacaoEstornoRegistrada("");
     setPagamentos([]);
     setFormaPagamentoFinalizacao("PIX");
+    setValorRecebidoPedido("");
+    setValorRecebidoFinalizacao("");
   }
 
   function preencherComDetalhe(detalhe: PedidoDetalhe) {
@@ -446,6 +463,8 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setObservacaoEstornoRegistrada(detalhe.observacaoEstorno ?? "");
     setPagamentos(detalhe.pagamentos ?? []);
     setFormaPagamentoFinalizacao(toUiFormaPagamento(detalhe.formaPagamento));
+    setValorRecebidoPedido("");
+    setValorRecebidoFinalizacao("");
     reset({
       cliente: detalhe.cliente,
       empresa: detalhe.empresa ?? "",
@@ -590,6 +609,36 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
                   <option value="Parcelado">Parcelado</option>
                 </Select>
               </label>
+
+              {formaPagamento === "Dinheiro" && valorAPagar > 0 && (
+                <div className="col-span-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2 dark:border-slate-800 dark:bg-slate-900/50">
+                  <span className="text-xs font-bold text-muted-foreground block">Calculadora de Troco</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label>
+                      <span className="text-xs font-semibold text-muted-foreground">Valor Recebido</span>
+                      <Input
+                        className="h-8 text-xs mt-1"
+                        value={valorRecebidoPedido}
+                        onChange={(e) => setValorRecebidoPedido(maskCurrency(e.target.value))}
+                        placeholder="R$ 0,00"
+                      />
+                    </label>
+                    <label>
+                      <span className="text-xs font-semibold text-muted-foreground">Troco</span>
+                      <Input
+                        className="h-8 text-xs mt-1 bg-muted font-bold text-emerald-600 dark:text-emerald-400"
+                        value={formatCurrency(trocoPedido)}
+                        readOnly
+                      />
+                    </label>
+                  </div>
+                  {valorRecebidoPedidoNum > 0 && valorRecebidoPedidoNum >= valorAPagar && (
+                    <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                      Pedido: {formatCurrency(valorAPagar)} | Pagamento: {formatCurrency(valorRecebidoPedidoNum)} | Troco: {formatCurrency(trocoPedido)}
+                    </p>
+                  )}
+                </div>
+              )}
               <Field label="Total geral" value={formatCurrency(totalGeral)} onChange={() => undefined} readOnly />
               {pedido && <Field label="Pago registrado" value={formatCurrency(valorPagoRegistrado)} onChange={() => undefined} readOnly />}
               {pedido && <Field label="Saldo devedor" value={formatCurrency(saldoDevedor)} onChange={() => undefined} readOnly />}
@@ -818,6 +867,36 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
                     <option value="CARTAO_DEBITO">Cartão de débito</option>
                   </Select>
                 </label>
+
+                {formaPagamentoFinalizacao === "Dinheiro" && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2 dark:border-slate-800 dark:bg-slate-900/50">
+                    <span className="text-xs font-bold text-muted-foreground block">Calculadora de Troco</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label>
+                        <span className="text-xs font-semibold text-muted-foreground">Valor Recebido</span>
+                        <Input
+                          className="h-8 text-xs mt-1"
+                          value={valorRecebidoFinalizacao}
+                          onChange={(e) => setValorRecebidoFinalizacao(maskCurrency(e.target.value))}
+                          placeholder="R$ 0,00"
+                        />
+                      </label>
+                      <label>
+                        <span className="text-xs font-semibold text-muted-foreground">Troco</span>
+                        <Input
+                          className="h-8 text-xs mt-1 bg-muted font-bold text-emerald-600 dark:text-emerald-400"
+                          value={formatCurrency(trocoFinalizacao)}
+                          readOnly
+                        />
+                      </label>
+                    </div>
+                    {valorRecebidoFinalizacaoNum > 0 && valorRecebidoFinalizacaoNum >= saldoDevedor && (
+                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                        Pedido: {formatCurrency(saldoDevedor)} | Pagamento: {formatCurrency(valorRecebidoFinalizacaoNum)} | Troco: {formatCurrency(trocoFinalizacao)}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

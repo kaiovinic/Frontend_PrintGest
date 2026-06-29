@@ -110,6 +110,7 @@ export type PedidoFiltro = {
   inicio?: string;
   fim?: string;
   status?: string;
+  atendente?: string;
   pagina?: number;
   tamanhoPagina?: number;
 };
@@ -132,11 +133,19 @@ export function listarPedidos(filtros: PedidoFiltro = {}) {
     if (filtros.mes) params.set("mes", String(Number(filtros.mes)));
   }
   if (filtros.status) params.set("status", filtros.status);
+  if (filtros.atendente) params.set("atendente", filtros.atendente);
   params.set("pagina", String(filtros.pagina ?? 1));
   params.set("tamanhoPagina", String(filtros.tamanhoPagina ?? 10));
 
   const query = params.toString();
   return apiRequest<ResultadoPaginado<PedidoResumo>>(`/pedidos${query ? `?${query}` : ""}`);
+}
+
+export function listarPedidosPendentesEntrega(atendente?: string) {
+  const params = new URLSearchParams();
+  if (atendente) params.set("atendente", atendente);
+  const query = params.toString();
+  return apiRequest<PedidoResumo[]>(`/pedidos/pendentes-entrega${query ? `?${query}` : ""}`);
 }
 
 export function obterPedido(id: number) {

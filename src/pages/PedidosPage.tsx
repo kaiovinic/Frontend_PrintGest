@@ -1,4 +1,4 @@
-﻿import { Eye, Filter, Plus, XCircle } from "lucide-react";
+import { Eye, Filter, Plus, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Page } from "@/components/AppLayout";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { listarPedidos, type PedidoResumo } from "@/services/pedidoService";
+import { listarUsuarios, type Usuario } from "@/services/usuarioService";
 import { formatCurrency, formatStatusPedido, formatTipoPedido } from "@/utils/formatters";
 
 type Navigate = (page: Page, pedido?: PedidoResumo | null) => void;
@@ -39,12 +40,14 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFinal, setDataFinal] = useState("");
   const [status, setStatus] = useState("");
+  const [atendente, setAtendente] = useState("");
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [pagina, setPagina] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
-  function carregarPedidos(paginaDesejada = pagina, filtrosOverride?: { ano: string; mes: string; inicio: string; fim: string; status: string }) {
-    const filtrosAtuais = filtrosOverride ?? { ano, mes, inicio: dataInicio, fim: dataFinal, status };
+  function carregarPedidos(paginaDesejada = pagina, filtrosOverride?: { ano: string; mes: string; inicio: string; fim: string; status: string; atendente: string }) {
+    const filtrosAtuais = filtrosOverride ?? { ano, mes, inicio: dataInicio, fim: dataFinal, status, atendente };
     setIsLoading(true);
     setError(null);
     listarPedidos({ ...filtrosAtuais, pagina: paginaDesejada, tamanhoPagina })
@@ -60,6 +63,9 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
 
   useEffect(() => {
     carregarPedidos(1);
+    listarUsuarios()
+      .then(setUsuarios)
+      .catch((err) => console.error("Erro ao carregar usuarios", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -95,13 +101,15 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
       mes: String(currentDate.getMonth() + 1).padStart(2, "0"),
       inicio: "",
       fim: "",
-      status: ""
+      status: "",
+      atendente: ""
     };
     setAno(filtrosLimpos.ano);
     setMes(filtrosLimpos.mes);
     setDataInicio(filtrosLimpos.inicio);
     setDataFinal(filtrosLimpos.fim);
     setStatus(filtrosLimpos.status);
+    setAtendente(filtrosLimpos.atendente);
     carregarPedidos(1, filtrosLimpos);
   }
 
@@ -131,7 +139,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
       </section>
 
       <Card>
-        <CardContent className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-[140px_180px_1fr_1fr_190px_auto_auto]">
+        <CardContent className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-[120px_140px_1fr_1fr_160px_160px_auto_auto]">
           <label>
             <span className="field-label">Ano</span>
             <Input className="mt-2" value={ano} onChange={(event) => setAno(event.target.value)} disabled={Boolean(dataInicio || dataFinal)} />
@@ -162,6 +170,17 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
               <option value="Aberto">Aberto</option>
               <option value="Finalizado">Finalizado</option>
               <option value="Cancelado">Cancelado</option>
+            </Select>
+          </label>
+          <label>
+            <span className="field-label">Atendente</span>
+            <Select value={atendente} onChange={setAtendente}>
+              <option value="">Todos</option>
+              {usuarios.map((u) => (
+                <option key={u.id} value={u.nome}>
+                  {u.nome}
+                </option>
+              ))}
             </Select>
           </label>
           <Button className="self-end" variant="outline" onClick={aplicarFiltro}>

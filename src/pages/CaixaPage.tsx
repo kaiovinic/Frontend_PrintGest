@@ -1,4 +1,4 @@
-﻿import { zodResolver } from "@hookform/resolvers/zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -130,7 +130,103 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
 }
 
 function CaixaFormCard({ form, tipo, categorias, pedidosEmAberto, pedidoSelecionado, isSaving, onNewCategory, onSelectPedido, onSubmit }: { form: UseFormReturn<CaixaForm>; tipo: "ENTRADA" | "SAIDA"; categorias: string[]; pedidosEmAberto: PedidoResumo[]; pedidoSelecionado?: PedidoResumo; isSaving: boolean; onNewCategory: () => void; onSelectPedido: (value: string) => void; onSubmit: (values: CaixaForm) => void }) {
-  return <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}><label><span className="field-label">Tipo</span><Select register={form.register("tipo", { onChange: (event) => { if (event.target.value === "SAIDA") form.setValue("pedidoId", ""); } })}><option value="ENTRADA">Entrada</option><option value="SAIDA">Saida</option></Select></label>{tipo === "ENTRADA" && <label><span className="field-label">Vincular a pedido</span><select className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring" value={form.watch("pedidoId") ?? ""} onChange={(event) => onSelectPedido(event.target.value)}><option value="">Entrada sem pedido</option>{pedidosEmAberto.map((pedido) => <option key={pedido.id} value={pedido.id}>#{pedido.numero} - {pedido.cliente} - saldo {formatCurrency(pedido.saldoDevedor)}</option>)}</select></label>}{pedidoSelecionado && <p className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">O valor registrado sera abatido do saldo do pedido. Saldo atual: {formatCurrency(pedidoSelecionado.saldoDevedor)}.</p>}<label><span className="field-label">Forma de pagamento</span><Select register={form.register("formaPagamento")}><option value="DINHEIRO">Dinheiro</option><option value="PIX">PIX</option><option value="CARTAO_CREDITO">Cartao credito</option><option value="CARTAO_DEBITO">Cartao debito</option></Select></label><FieldError message={form.formState.errors.categoria?.message}><label><span className="field-label">Motivo/Categoria</span><div className="mt-2 flex gap-2"><Select className="mt-0" register={form.register("categoria")}><option value="">Selecione</option>{categorias.map((categoria) => <option key={categoria} value={categoria}>{categoria}</option>)}</Select><Button type="button" variant="outline" onClick={onNewCategory}>Nova</Button></div></label></FieldError><FieldError message={form.formState.errors.descricao?.message}><FieldInput label="Descricao" register={form.register("descricao")} /></FieldError><FieldError message={form.formState.errors.valor?.message}><FieldInput label="Valor" register={form.register("valor", { onChange: (event) => form.setValue("valor", maskCurrency(event.target.value)) })} /></FieldError><label className="space-y-2"><span className="field-label">Observacao</span><Textarea {...form.register("observacao")} maxLength={300} />{form.formState.errors.observacao && <ErrorText message={form.formState.errors.observacao.message} />}</label><Button type="submit" disabled={isSaving}>{isSaving ? "Registrando..." : "Registrar movimentacao"}</Button></form>;
+  const formaPagamento = form.watch("formaPagamento");
+  const valor = form.watch("valor");
+  const [valorRecebido, setValorRecebido] = useState("");
+
+  const valorNum = parseCurrency(valor);
+  const valorRecebidoNum = parseCurrency(valorRecebido);
+  const troco = Math.max(0, valorRecebidoNum - valorNum);
+
+  return (
+    <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+      <label>
+        <span className="field-label">Tipo</span>
+        <Select register={form.register("tipo", { onChange: (event) => { if (event.target.value === "SAIDA") form.setValue("pedidoId", ""); } })}>
+          <option value="ENTRADA">Entrada</option>
+          <option value="SAIDA">Saida</option>
+        </Select>
+      </label>
+      {tipo === "ENTRADA" && (
+        <label>
+          <span className="field-label">Vincular a pedido</span>
+          <select className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring" value={form.watch("pedidoId") ?? ""} onChange={(event) => onSelectPedido(event.target.value)}>
+            <option value="">Entrada sem pedido</option>
+            {pedidosEmAberto.map((pedido) => <option key={pedido.id} value={pedido.id}>#{pedido.numero} - {pedido.cliente} - saldo {formatCurrency(pedido.saldoDevedor)}</option>)}
+          </select>
+        </label>
+      )}
+      {pedidoSelecionado && (
+        <p className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">
+          O valor registrado sera abatido do saldo do pedido. Saldo atual: {formatCurrency(pedidoSelecionado.saldoDevedor)}.
+        </p>
+      )}
+      <label>
+        <span className="field-label">Forma de pagamento</span>
+        <Select register={form.register("formaPagamento")}>
+          <option value="DINHEIRO">Dinheiro</option>
+          <option value="PIX">PIX</option>
+          <option value="CARTAO_CREDITO">Cartao credito</option>
+          <option value="CARTAO_DEBITO">Cartao debito</option>
+        </Select>
+      </label>
+      <FieldError message={form.formState.errors.categoria?.message}>
+        <label>
+          <span className="field-label">Motivo/Categoria</span>
+          <div className="mt-2 flex gap-2">
+            <Select className="mt-0" register={form.register("categoria")}>
+              <option value="">Selecione</option>
+              {categorias.map((categoria) => <option key={categoria} value={categoria}>{categoria}</option>)}
+            </Select>
+            <Button type="button" variant="outline" onClick={onNewCategory}>Nova</Button>
+          </div>
+        </label>
+      </FieldError>
+      <FieldError message={form.formState.errors.descricao?.message}>
+        <FieldInput label="Descricao" register={form.register("descricao")} />
+      </FieldError>
+      <FieldError message={form.formState.errors.valor?.message}>
+        <FieldInput label="Valor" register={form.register("valor", { onChange: (event) => form.setValue("valor", maskCurrency(event.target.value)) })} />
+      </FieldError>
+
+      {formaPagamento === "DINHEIRO" && valorNum > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2 dark:border-slate-800 dark:bg-slate-900/50">
+          <span className="text-xs font-bold text-muted-foreground block">Calculadora de Troco</span>
+          <div className="grid grid-cols-2 gap-2">
+            <label>
+              <span className="text-xs font-semibold text-muted-foreground">Valor Pago</span>
+              <Input
+                className="h-8 text-xs mt-1"
+                value={valorRecebido}
+                onChange={(e) => setValorRecebido(maskCurrency(e.target.value))}
+                placeholder="R$ 0,00"
+              />
+            </label>
+            <label>
+              <span className="text-xs font-semibold text-muted-foreground">Troco</span>
+              <Input
+                className="h-8 text-xs mt-1 bg-muted font-bold text-emerald-600 dark:text-emerald-400"
+                value={formatCurrency(troco)}
+                readOnly
+              />
+            </label>
+          </div>
+          {valorRecebidoNum > 0 && valorRecebidoNum >= valorNum && (
+            <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              Pedido/Movimentação: {formatCurrency(valorNum)} | Pagamento: {formatCurrency(valorRecebidoNum)} | Troco: {formatCurrency(troco)}
+            </p>
+          )}
+        </div>
+      )}
+
+      <label className="space-y-2">
+        <span className="field-label">Observacao</span>
+        <Textarea {...form.register("observacao")} maxLength={300} />
+        {form.formState.errors.observacao && <ErrorText message={form.formState.errors.observacao.message} />}
+      </label>
+      <Button type="submit" disabled={isSaving}>{isSaving ? "Registrando..." : "Registrar movimentacao"}</Button>
+    </form>
+  );
 }
 
 function MovimentacoesCard({ movimentacoes, isLoading, total, pagina, totalPaginas, onPageChange }: { movimentacoes: CaixaMovimentacao[]; isLoading: boolean; total: number; pagina: number; totalPaginas: number; onPageChange: (pagina: number) => void }) {
