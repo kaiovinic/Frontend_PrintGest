@@ -156,7 +156,7 @@ export function DashboardPage({ setPage }: { setPage: Navigate }) {
         <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Próximas entregas</CardTitle>
-            <p className="text-sm text-muted-foreground font-semibold">Pedidos e orçamentos pendentes com data de entrega definida</p>
+            <p className="text-sm text-muted-foreground font-semibold">Pedidos pendentes com data de entrega definida</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-muted-foreground">Atendente:</span>
