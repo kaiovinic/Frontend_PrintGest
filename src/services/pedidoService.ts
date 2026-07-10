@@ -113,6 +113,7 @@ export type PedidoFiltro = {
   fim?: string;
   status?: string;
   atendente?: string;
+  cliente?: string;
   pagina?: number;
   tamanhoPagina?: number;
 };
@@ -136,6 +137,7 @@ export function listarPedidos(filtros: PedidoFiltro = {}) {
   }
   if (filtros.status) params.set("status", filtros.status);
   if (filtros.atendente) params.set("atendente", filtros.atendente);
+  if (filtros.cliente) params.set("cliente", filtros.cliente);
   params.set("pagina", String(filtros.pagina ?? 1));
   params.set("tamanhoPagina", String(filtros.tamanhoPagina ?? 10));
 

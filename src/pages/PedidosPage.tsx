@@ -41,13 +41,14 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
   const [dataFinal, setDataFinal] = useState("");
   const [status, setStatus] = useState("");
   const [atendente, setAtendente] = useState("");
+  const [cliente, setCliente] = useState("");
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [pagina, setPagina] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
 
-  function carregarPedidos(paginaDesejada = pagina, filtrosOverride?: { ano: string; mes: string; inicio: string; fim: string; status: string; atendente: string }) {
-    const filtrosAtuais = filtrosOverride ?? { ano, mes, inicio: dataInicio, fim: dataFinal, status, atendente };
+  function carregarPedidos(paginaDesejada = pagina, filtrosOverride?: { ano: string; mes: string; inicio: string; fim: string; status: string; atendente: string; cliente: string }) {
+    const filtrosAtuais = filtrosOverride ?? { ano, mes, inicio: dataInicio, fim: dataFinal, status, atendente, cliente };
     setIsLoading(true);
     setError(null);
     listarPedidos({ ...filtrosAtuais, pagina: paginaDesejada, tamanhoPagina })
@@ -102,7 +103,8 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
       inicio: "",
       fim: "",
       status: "",
-      atendente: ""
+      atendente: "",
+      cliente: ""
     };
     setAno(filtrosLimpos.ano);
     setMes(filtrosLimpos.mes);
@@ -110,6 +112,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
     setDataFinal(filtrosLimpos.fim);
     setStatus(filtrosLimpos.status);
     setAtendente(filtrosLimpos.atendente);
+    setCliente(filtrosLimpos.cliente);
     carregarPedidos(1, filtrosLimpos);
   }
 
@@ -139,7 +142,7 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
       </section>
 
       <Card>
-        <CardContent className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-[120px_140px_1fr_1fr_160px_160px_auto_auto]">
+        <CardContent className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-[120px_140px_1fr_1fr_160px_160px_200px_auto_auto]">
           <label>
             <span className="field-label">Ano</span>
             <Input className="mt-2" value={ano} onChange={(event) => setAno(event.target.value)} disabled={Boolean(dataInicio || dataFinal)} />
@@ -182,6 +185,10 @@ export function PedidosPage({ setPage }: { setPage: Navigate }) {
                 </option>
               ))}
             </Select>
+          </label>
+          <label>
+            <span className="field-label">Cliente</span>
+            <Input className="mt-2" value={cliente} onChange={(event) => setCliente(event.target.value)} placeholder="Nome do cliente" />
           </label>
           <Button className="self-end" variant="outline" onClick={aplicarFiltro}>
             <Filter size={16} />
