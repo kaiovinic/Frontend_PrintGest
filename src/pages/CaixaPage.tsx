@@ -21,7 +21,20 @@ type CaixaFiltros = { inicio: string; fim: string };
 
 const emptyResumo: CaixaResumo = { entradas: 0, saidas: 0, saldo: 0, dinheiro: 0, pix: 0, cartaoCredito: 0, cartaoDebito: 0 };
 const emptyMovimentacoes = { itens: [], total: 0, pagina: 1, tamanhoPagina: 10, totalPaginas: 1 };
-const categoriasPadrao = ["Servico avulso", "Troco inicial", "Ajuste de caixa", "Material de limpeza", "Compra emergencial", "Transporte", "Alimentacao", "Sangria de caixa"];
+const categoriasPadrao = ["Servico avulso", "Troco inicial", "Ajuste de caixa", "Material de limpeza", "Compra emergencial", "Transporte", "Alimentacao", "Sangria de caixa", "Pagamentos"];
+const LOCAL_STORAGE_CATEGORIES_KEY = "printgest_caixa_categorias";
+
+function obterCategoriasIniciais(): string[] {
+  const salvas = localStorage.getItem(LOCAL_STORAGE_CATEGORIES_KEY);
+  if (salvas) {
+    try {
+      return JSON.parse(salvas);
+    } catch {
+      // fallback
+    }
+  }
+  return categoriasPadrao;
+}
 
 const caixaSchema = z.object({
   tipo: z.enum(["ENTRADA", "SAIDA"]),
@@ -51,7 +64,7 @@ export function CaixaPage({ usuarioId, setPage }: CaixaPageProps) {
   const [inicioInput, setInicioInput] = useState(filtros.inicio);
   const [fimInput, setFimInput] = useState(filtros.fim);
   const [paginaMovimentacoes, setPaginaMovimentacoes] = useState(1);
-  const [categorias, setCategorias] = useState(categoriasPadrao);
+  const [categorias, setCategorias] = useState<string[]>(() => obterCategoriasIniciais());
   const [categoriaModalOpen, setCategoriaModalOpen] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
 
@@ -139,7 +152,11 @@ export function CaixaPage({ usuarioId, setPage }: CaixaPageProps) {
 
   function salvarCategoria(values: CategoriaForm) {
     const nome = values.nome.trim();
-    setCategorias((current) => [...new Set([...current, nome])].sort((a, b) => a.localeCompare(b, "pt-BR")));
+    setCategorias((current) => {
+      const novaLista = [...new Set([...current, nome])].sort((a, b) => a.localeCompare(b, "pt-BR"));
+      localStorage.setItem(LOCAL_STORAGE_CATEGORIES_KEY, JSON.stringify(novaLista));
+      return novaLista;
+    });
     form.setValue("categoria", nome);
     categoriaForm.reset({ nome: "" });
     setCategoriaModalOpen(false);
