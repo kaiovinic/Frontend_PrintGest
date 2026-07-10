@@ -68,3 +68,16 @@ export function criarMovimentacaoCaixa(payload: CaixaMovimentacaoPayload) {
     body: payload
   });
 }
+
+export type CancelarMovimentacaoPayload = {
+  usuarioId: number;
+  supervisorEmail: string;
+  supervisorSenha: string;
+};
+
+export function cancelarMovimentacaoCaixa(id: string, payload: CancelarMovimentacaoPayload) {
+  return apiRequest<{ mensagem: string }>(`/caixa/movimentacoes/${id}/cancelar`, {
+    method: "POST",
+    body: payload
+  });
+}

@@ -23,6 +23,7 @@ import {
   type PedidoResumo
 } from "@/services/pedidoService";
 import { ApiError } from "@/services/api";
+import { criarMovimentacaoCaixa } from "@/services/caixaService";
 import { formatCurrency, formatStatusPedido, formatTipoPedido, maskCpfCnpj, maskCurrency, maskPhone, parseCurrency } from "@/utils/formatters";
 
 const itemSchema = z.object({
@@ -146,6 +147,14 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const [formaPagamentoFinalizacao, setFormaPagamentoFinalizacao] = useState("PIX");
   const [valorRecebidoPedido, setValorRecebidoPedido] = useState("");
   const [valorRecebidoFinalizacao, setValorRecebidoFinalizacao] = useState("");
+
+  // Quick payment form states (for editing existing orders)
+  const [mostrarFormPagamento, setMostrarFormPagamento] = useState(false);
+  const [novoPagamentoValor, setNovoPagamentoValor] = useState("");
+  const [novoPagamentoForma, setNovoPagamentoForma] = useState("PIX");
+  const [novoPagamentoObs, setNovoPagamentoObs] = useState("");
+  const [novoPagamentoRecebido, setNovoPagamentoRecebido] = useState("");
+  const [isSavingPagamento, setIsSavingPagamento] = useState(false);
 
   // Split payment state
   const [dividirPagamento, setDividirPagamento] = useState(false);
@@ -513,6 +522,9 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setValorRecebidoPedido("");
     setValorRecebidoFinalizacao("");
     
+    // Initialize quick payment form values
+    setNovoPagamentoValor(formatCurrency(detalhe.saldoDevedor));
+    
     const isSplit = detalhe.formaPagamento?.includes(" e ") ?? false;
     setDividirPagamento(isSplit);
     if (isSplit && detalhe.formaPagamento) {
@@ -551,6 +563,46 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
           }))
         : [{ quantidade: "", tamanho: "", descricao: "", precoUnitario: formatCurrency(0) }]
     });
+  }
+
+  async function executarRegistroPagamento() {
+    if (!pedido) return;
+    const valor = parseCurrency(novoPagamentoValor);
+    if (valor <= 0) {
+      setStatusMensagem("Informe um valor maior que zero.");
+      return;
+    }
+    if (valor > saldoDevedor) {
+      setStatusMensagem("O valor do pagamento não pode ser maior que o saldo devedor.");
+      return;
+    }
+
+    setIsSavingPagamento(true);
+    setStatusMensagem(null);
+    try {
+      await criarMovimentacaoCaixa({
+        usuarioId,
+        pedidoId: pedido.id,
+        tipo: "ENTRADA",
+        formaPagamento: novoPagamentoForma,
+        categoria: "Pedido",
+        descricao: `Pagamento do pedido ${pedido.numero} - ${watch("cliente")}`,
+        valor: valor,
+        observacao: novoPagamentoObs?.trim() || null
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      await queryClient.invalidateQueries({ queryKey: ["caixa"] });
+      
+      setMostrarFormPagamento(false);
+      setNovoPagamentoObs("");
+      setNovoPagamentoRecebido("");
+      setStatusMensagem("Pagamento registrado com sucesso!");
+    } catch (error) {
+      setStatusMensagem(error instanceof ApiError ? error.message : "Não foi possível registrar o pagamento.");
+    } finally {
+      setIsSavingPagamento(false);
+    }
   }
 
   return (
@@ -830,18 +882,108 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
               </p>
             )}
 
-            {pedido && pagamentos.length > 0 && (
-              <div className="rounded-lg border p-4">
-                <p className="mb-3 text-sm font-black">Pagamentos registrados</p>
-                <div className="space-y-2">
-                  {pagamentos.map((pagamento) => (
-                    <div key={pagamento.id} className="grid gap-2 rounded-md bg-muted/40 p-3 text-sm md:grid-cols-[1fr_1fr_1fr]">
-                      <span className="font-semibold">{formatCurrency(pagamento.valor)}</span>
-                      <span>{formatFormaPagamento(pagamento.formaPagamento)}</span>
-                      <span>{formatDateTime(pagamento.registradoEm)}</span>
-                    </div>
-                  ))}
+            {pedido && (
+              <div className="rounded-lg border p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-black">Pagamentos registrados</p>
+                  {!registroEncerrado && saldoDevedor > 0 && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => {
+                        setMostrarFormPagamento(!mostrarFormPagamento);
+                        setNovoPagamentoValor(formatCurrency(saldoDevedor));
+                      }}
+                    >
+                      {mostrarFormPagamento ? "Cancelar" : "Registrar Pagamento"}
+                    </Button>
+                  )}
                 </div>
+
+                {mostrarFormPagamento && !registroEncerrado && saldoDevedor > 0 && (
+                  <div className="rounded-md border bg-slate-50/50 p-4 space-y-3 dark:bg-slate-900/50">
+                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 block">Novo Pagamento no Caixa</p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label>
+                        <span className="field-label font-bold text-xs">Valor</span>
+                        <Input
+                          className="mt-2 h-9"
+                          value={novoPagamentoValor}
+                          onChange={(e) => setNovoPagamentoValor(maskCurrency(e.target.value))}
+                        />
+                      </label>
+                      <label>
+                        <span className="field-label font-bold text-xs">Forma de pagamento</span>
+                        <select
+                          className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          value={novoPagamentoForma}
+                          onChange={(e) => setNovoPagamentoForma(e.target.value)}
+                        >
+                          <option value="DINHEIRO">Dinheiro</option>
+                          <option value="PIX">PIX</option>
+                          <option value="CARTAO_CREDITO">Cartão Crédito</option>
+                          <option value="CARTAO_DEBITO">Cartão Débito</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span className="field-label font-bold text-xs">Observação</span>
+                        <Input
+                          className="mt-2 h-9"
+                          value={novoPagamentoObs}
+                          onChange={(e) => setNovoPagamentoObs(e.target.value)}
+                          placeholder="Opcional"
+                        />
+                      </label>
+                    </div>
+
+                    {novoPagamentoForma === "DINHEIRO" && parseCurrency(novoPagamentoValor) > 0 && (
+                      <div className="grid grid-cols-2 gap-2 mt-2 max-w-sm">
+                        <label>
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Valor Recebido</span>
+                          <Input
+                            className="h-8 text-xs mt-1"
+                            value={novoPagamentoRecebido}
+                            onChange={(e) => setNovoPagamentoRecebido(maskCurrency(e.target.value))}
+                            placeholder="R$ 0,00"
+                          />
+                        </label>
+                        <label>
+                          <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Troco</span>
+                          <Input
+                            className="h-8 text-xs mt-1 bg-muted font-bold text-emerald-600 dark:text-emerald-400"
+                            value={formatCurrency(Math.max(0, parseCurrency(novoPagamentoRecebido) - parseCurrency(novoPagamentoValor)))}
+                            readOnly
+                          />
+                        </label>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 mt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={isSavingPagamento}
+                        onClick={executarRegistroPagamento}
+                      >
+                        {isSavingPagamento ? "Registrando..." : "Confirmar Pagamento"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {pagamentos.length > 0 ? (
+                  <div className="space-y-2">
+                    {pagamentos.map((pagamento) => (
+                      <div key={pagamento.id} className="grid gap-2 rounded-md bg-muted/40 p-3 text-sm md:grid-cols-[1fr_1fr_1fr]">
+                        <span className="font-semibold">{formatCurrency(pagamento.valor)}</span>
+                        <span>{formatFormaPagamento(pagamento.formaPagamento)}</span>
+                        <span>{formatDateTime(pagamento.registradoEm)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum pagamento registrado ainda.</p>
+                )}
               </div>
             )}
 

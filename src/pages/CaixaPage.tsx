@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { criarMovimentacaoCaixa, listarMovimentacoesCaixa, obterResumoCaixa, type CaixaMovimentacao, type CaixaResumo } from "@/services/caixaService";
+import { cancelarMovimentacaoCaixa, criarMovimentacaoCaixa, listarMovimentacoesCaixa, obterResumoCaixa, type CaixaMovimentacao, type CaixaResumo, type CancelarMovimentacaoPayload } from "@/services/caixaService";
 import { listarPedidos, type PedidoResumo } from "@/services/pedidoService";
 import { formatCurrency, maskCurrency, parseCurrency } from "@/utils/formatters";
 
@@ -54,6 +54,49 @@ export function CaixaPage({ usuarioId, setPage }: CaixaPageProps) {
   const [categorias, setCategorias] = useState(categoriasPadrao);
   const [categoriaModalOpen, setCategoriaModalOpen] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
+
+  // Supervisor cancel state
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+  const [supervisorEmail, setSupervisorEmail] = useState("");
+  const [supervisorSenha, setSupervisorSenha] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  const deletarMutation = useMutation({
+    mutationFn: (payload: CancelarMovimentacaoPayload & { id: string }) => cancelarMovimentacaoCaixa(payload.id, {
+      usuarioId: payload.usuarioId,
+      supervisorEmail: payload.supervisorEmail,
+      supervisorSenha: payload.supervisorSenha
+    }),
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["caixa"] });
+      await queryClient.invalidateQueries({ queryKey: ["pedidos"] });
+      fecharModalCancelamento();
+      setMensagem(data.mensagem || "Movimentação cancelada com sucesso.");
+    },
+    onError: (error) => setCancelError(error instanceof Error ? error.message : "Não foi possível cancelar a movimentação.")
+  });
+
+  function fecharModalCancelamento() {
+    setCancelTargetId(null);
+    setSupervisorEmail("");
+    setSupervisorSenha("");
+    setCancelError(null);
+  }
+
+  function confirmarCancelamento(e: React.FormEvent) {
+    e.preventDefault();
+    if (!cancelTargetId) return;
+    if (!supervisorEmail.trim() || !supervisorSenha) {
+      setCancelError("Informe o e-mail e a senha do supervisor.");
+      return;
+    }
+    deletarMutation.mutate({
+      id: cancelTargetId,
+      usuarioId,
+      supervisorEmail,
+      supervisorSenha
+    });
+  }
 
   const form = useForm<CaixaForm>({ resolver: zodResolver(caixaSchema), defaultValues: emptyForm });
   const categoriaForm = useForm<CategoriaForm>({ resolver: zodResolver(categoriaSchema), defaultValues: { nome: "" } });
@@ -123,9 +166,70 @@ export function CaixaPage({ usuarioId, setPage }: CaixaPageProps) {
       {mensagem && <p className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">{mensagem}</p>}
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <Card><CardHeader><CardTitle>Nova movimentacao manual</CardTitle></CardHeader><CardContent><CaixaFormCard form={form} tipo={tipo} categorias={categorias} pedidosEmAberto={pedidosEmAberto} pedidoSelecionado={pedidoSelecionado} isSaving={isSaving} onNewCategory={() => setCategoriaModalOpen(true)} onSelectPedido={selecionarPedido} onSubmit={(values) => movimentacaoMutation.mutate(values)} /></CardContent></Card>
-        <MovimentacoesCard movimentacoes={movimentacoesResponse.itens} isLoading={movimentacoesQuery.isLoading} total={movimentacoesResponse.total} pagina={movimentacoesResponse.pagina} totalPaginas={movimentacoesResponse.totalPaginas} onPageChange={setPaginaMovimentacoes} setPage={setPage} />
+        <MovimentacoesCard
+          movimentacoes={movimentacoesResponse.itens}
+          isLoading={movimentacoesQuery.isLoading}
+          total={movimentacoesResponse.total}
+          pagina={movimentacoesResponse.pagina}
+          totalPaginas={movimentacoesResponse.totalPaginas}
+          onPageChange={setPaginaMovimentacoes}
+          setPage={setPage}
+          onCancel={setCancelTargetId}
+        />
       </div>
       {categoriaModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"><Card className="w-full max-w-md shadow-2xl"><CardHeader><CardTitle>Nova categoria do caixa</CardTitle></CardHeader><CardContent><form className="space-y-4" onSubmit={categoriaForm.handleSubmit(salvarCategoria)}><FieldError message={categoriaForm.formState.errors.nome?.message}><FieldInput label="Nome da categoria" register={categoriaForm.register("nome")} /></FieldError><div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => setCategoriaModalOpen(false)}>Cancelar</Button><Button type="submit">Salvar categoria</Button></div></form></CardContent></Card></div>}
+
+      {cancelTargetId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
+          <Card className="w-full max-w-md shadow-2xl">
+            <CardHeader>
+              <CardTitle>Autorização de Supervisor</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Esta ação de cancelamento ({cancelTargetId}) é crítica e exige credenciais de um Administrador ou Gerente.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-4" onSubmit={confirmarCancelamento}>
+                {cancelError && (
+                  <p className="text-sm font-semibold text-destructive rounded-md bg-destructive/10 p-3">
+                    {cancelError}
+                  </p>
+                )}
+                <label>
+                  <span className="field-label">E-mail do Supervisor</span>
+                  <Input
+                    className="mt-2"
+                    type="email"
+                    required
+                    value={supervisorEmail}
+                    onChange={(e) => setSupervisorEmail(e.target.value)}
+                    placeholder="supervisor@print.com"
+                  />
+                </label>
+                <label>
+                  <span className="field-label">Senha</span>
+                  <Input
+                    className="mt-2"
+                    type="password"
+                    required
+                    value={supervisorSenha}
+                    onChange={(e) => setSupervisorSenha(e.target.value)}
+                    placeholder="••••••••"
+                  />
+                </label>
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button type="button" variant="outline" onClick={fecharModalCancelamento} disabled={deletarMutation.isPending}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" variant="destructive" disabled={deletarMutation.isPending}>
+                    {deletarMutation.isPending ? "Confirmando..." : "Confirmar Cancelamento"}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -237,7 +341,8 @@ function MovimentacoesCard({
   pagina,
   totalPaginas,
   onPageChange,
-  setPage
+  setPage,
+  onCancel
 }: {
   movimentacoes: CaixaMovimentacao[];
   isLoading: boolean;
@@ -246,6 +351,7 @@ function MovimentacoesCard({
   totalPaginas: number;
   onPageChange: (pagina: number) => void;
   setPage: (page: Page, pedido?: PedidoResumo | null) => void;
+  onCancel: (id: string) => void;
 }) {
   return (
     <Card className="min-w-0">
@@ -298,56 +404,65 @@ function MovimentacoesCard({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {mov.origem === "PEDIDO" && mov.pedidoId && (
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setPage("recibo-pedido", {
-                              id: mov.pedidoId!,
-                              tipo: "PEDIDO",
-                              numero: "",
-                              cliente: "",
-                              status: "",
-                              dataPedido: "",
-                              dataEntrega: null,
-                              total: 0,
-                              valorPago: 0,
-                              valorEstornado: 0,
-                              saldoDevedor: 0,
-                              criadoPor: "",
-                              motivoCancelamento: null
-                            } as unknown as PedidoResumo)
-                          }
-                        >
-                          Ver
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            setPage("novo-pedido", {
-                              id: mov.pedidoId!,
-                              tipo: "PEDIDO",
-                              numero: "",
-                              cliente: "",
-                              status: "",
-                              dataPedido: "",
-                              dataEntrega: null,
-                              total: 0,
-                              valorPago: 0,
-                              valorEstornado: 0,
-                              saldoDevedor: 0,
-                              criadoPor: "",
-                              motivoCancelamento: null
-                            } as unknown as PedidoResumo)
-                          }
-                        >
-                          Editar
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex gap-2">
+                      {mov.origem === "PEDIDO" && mov.pedidoId && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setPage("recibo-pedido", {
+                                id: mov.pedidoId!,
+                                tipo: "PEDIDO",
+                                numero: "",
+                                cliente: "",
+                                status: "",
+                                dataPedido: "",
+                                dataEntrega: null,
+                                total: 0,
+                                valorPago: 0,
+                                valorEstornado: 0,
+                                saldoDevedor: 0,
+                                criadoPor: "",
+                                motivoCancelamento: null
+                              } as unknown as PedidoResumo)
+                            }
+                          >
+                            Ver
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setPage("novo-pedido", {
+                                id: mov.pedidoId!,
+                                tipo: "PEDIDO",
+                                numero: "",
+                                cliente: "",
+                                status: "",
+                                dataPedido: "",
+                                dataEntrega: null,
+                                total: 0,
+                                valorPago: 0,
+                                valorEstornado: 0,
+                                saldoDevedor: 0,
+                                criadoPor: "",
+                                motivoCancelamento: null
+                              } as unknown as PedidoResumo)
+                            }
+                          >
+                            Editar
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => onCancel(mov.id)}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
