@@ -204,6 +204,23 @@ export function PedidoReciboPage({ pedido }: { pedido?: PedidoResumo | null }) {
           </div>
         </section>
 
+        {detalhe.pagamentos && detalhe.pagamentos.length > 0 && (
+          <section className="receipt-section mt-3 border border-slate-400">
+            <h2 className="border-b border-slate-400 bg-slate-100 px-2 py-1 text-[11px] font-black uppercase tracking-wide">
+              Histórico de Pagamentos
+            </h2>
+            <div className="p-2 space-y-1 text-[11px]">
+              {detalhe.pagamentos.map((pag) => (
+                <div key={pag.id} className="grid grid-cols-3 gap-2 py-0.5 border-b border-slate-200 last:border-b-0">
+                  <span className="font-bold">{formatCurrency(pag.valor)}</span>
+                  <span>{formatFormaPagamento(pag.formaPagamento)}</span>
+                  <span className="text-slate-600 text-right">{formatDateTime(pag.registradoEm)}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <footer className="receipt-section mt-6 grid grid-cols-2 gap-12 text-center text-[11px] font-bold">
           <div className="border-t border-slate-900 pt-1">Vendedor</div>
           <div className="border-t border-slate-900 pt-1">Cliente</div>
@@ -245,13 +262,23 @@ function formatDate(value: string) {
 }
 
 function formatFormaPagamento(value: string | null) {
+  if (!value) return "-";
   const labels: Record<string, string> = {
     PIX: "PIX",
     DINHEIRO: "Dinheiro",
     CARTAO_CREDITO: "Cartão de crédito",
     CARTAO_DEBITO: "Cartão de débito"
   };
-  return value ? labels[value] ?? value : "-";
+  if (value.includes(" e ")) {
+    return value.split(" e ").map(v => labels[v.trim()] ?? v.trim()).join(" e ");
+  }
+  return labels[value] ?? value;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
 }
 
 function formatCondicao(value: string | null) {

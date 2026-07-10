@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
+import type { Page } from "@/components/AppLayout";
 import { useForm, type UseFormRegisterReturn, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,7 @@ import { criarMovimentacaoCaixa, listarMovimentacoesCaixa, obterResumoCaixa, typ
 import { listarPedidos, type PedidoResumo } from "@/services/pedidoService";
 import { formatCurrency, maskCurrency, parseCurrency } from "@/utils/formatters";
 
-type CaixaPageProps = { usuarioId: number };
+type CaixaPageProps = { usuarioId: number; setPage: (page: Page, pedido?: PedidoResumo | null) => void };
 type CaixaFiltros = { inicio: string; fim: string };
 
 const emptyResumo: CaixaResumo = { entradas: 0, saidas: 0, saldo: 0, dinheiro: 0, pix: 0, cartaoCredito: 0, cartaoDebito: 0 };
@@ -44,7 +45,7 @@ function mesAtualFiltro(): CaixaFiltros {
   return { inicio: `${mesAtual}-01`, fim: `${mesAtual}-${String(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate()).padStart(2, "0")}` };
 }
 
-export function CaixaPage({ usuarioId }: CaixaPageProps) {
+export function CaixaPage({ usuarioId, setPage }: CaixaPageProps) {
   const queryClient = useQueryClient();
   const [filtros, setFiltros] = useState<CaixaFiltros>(() => mesAtualFiltro());
   const [inicioInput, setInicioInput] = useState(filtros.inicio);
@@ -122,7 +123,7 @@ export function CaixaPage({ usuarioId }: CaixaPageProps) {
       {mensagem && <p className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">{mensagem}</p>}
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <Card><CardHeader><CardTitle>Nova movimentacao manual</CardTitle></CardHeader><CardContent><CaixaFormCard form={form} tipo={tipo} categorias={categorias} pedidosEmAberto={pedidosEmAberto} pedidoSelecionado={pedidoSelecionado} isSaving={isSaving} onNewCategory={() => setCategoriaModalOpen(true)} onSelectPedido={selecionarPedido} onSubmit={(values) => movimentacaoMutation.mutate(values)} /></CardContent></Card>
-        <MovimentacoesCard movimentacoes={movimentacoesResponse.itens} isLoading={movimentacoesQuery.isLoading} total={movimentacoesResponse.total} pagina={movimentacoesResponse.pagina} totalPaginas={movimentacoesResponse.totalPaginas} onPageChange={setPaginaMovimentacoes} />
+        <MovimentacoesCard movimentacoes={movimentacoesResponse.itens} isLoading={movimentacoesQuery.isLoading} total={movimentacoesResponse.total} pagina={movimentacoesResponse.pagina} totalPaginas={movimentacoesResponse.totalPaginas} onPageChange={setPaginaMovimentacoes} setPage={setPage} />
       </div>
       {categoriaModalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4"><Card className="w-full max-w-md shadow-2xl"><CardHeader><CardTitle>Nova categoria do caixa</CardTitle></CardHeader><CardContent><form className="space-y-4" onSubmit={categoriaForm.handleSubmit(salvarCategoria)}><FieldError message={categoriaForm.formState.errors.nome?.message}><FieldInput label="Nome da categoria" register={categoriaForm.register("nome")} /></FieldError><div className="flex justify-end gap-3"><Button type="button" variant="outline" onClick={() => setCategoriaModalOpen(false)}>Cancelar</Button><Button type="submit">Salvar categoria</Button></div></form></CardContent></Card></div>}
     </div>
@@ -229,8 +230,145 @@ function CaixaFormCard({ form, tipo, categorias, pedidosEmAberto, pedidoSelecion
   );
 }
 
-function MovimentacoesCard({ movimentacoes, isLoading, total, pagina, totalPaginas, onPageChange }: { movimentacoes: CaixaMovimentacao[]; isLoading: boolean; total: number; pagina: number; totalPaginas: number; onPageChange: (pagina: number) => void }) {
-  return <Card className="min-w-0"><CardHeader><CardTitle>Movimentacoes do caixa</CardTitle></CardHeader><CardContent className="overflow-x-auto"><Table className="min-w-[920px]"><TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Tipo</TableHead><TableHead>Forma</TableHead><TableHead>Categoria</TableHead><TableHead>Descricao</TableHead><TableHead>Valor</TableHead><TableHead>Usuario</TableHead><TableHead>Origem</TableHead></TableRow></TableHeader><TableBody>{isLoading && <TableRow><TableCell colSpan={8}>Carregando movimentacoes...</TableCell></TableRow>}{!isLoading && movimentacoes.length === 0 && <TableRow><TableCell colSpan={8}>Nenhuma movimentacao encontrada.</TableCell></TableRow>}{!isLoading && movimentacoes.map((mov) => <TableRow key={mov.id}><TableCell className="whitespace-nowrap">{formatDateTime(mov.movimentadoEm)}</TableCell><TableCell><Badge tone={mov.tipo === "ENTRADA" ? "success" : "danger"}>{mov.tipo === "ENTRADA" ? "Entrada" : "Saida"}</Badge></TableCell><TableCell>{formatFormaPagamento(mov.formaPagamento)}</TableCell><TableCell className="min-w-36 whitespace-normal">{mov.categoria}</TableCell><TableCell className="min-w-64 whitespace-normal">{mov.descricao}</TableCell><TableCell className="font-bold">{formatCurrency(mov.valor)}</TableCell><TableCell className="min-w-32">{mov.usuario || "-"}</TableCell><TableCell><Badge tone={mov.origem === "PEDIDO" ? "success" : "warning"}>{mov.origem === "PEDIDO" ? "Pedido" : "Manual"}</Badge></TableCell></TableRow>)}</TableBody></Table><div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-muted-foreground">{total} movimentacao{total === 1 ? "" : "es"} encontradas</p><div className="flex gap-2"><Button variant="outline" disabled={pagina <= 1} onClick={() => onPageChange(Math.max(1, pagina - 1))}>Anterior</Button><Button variant="outline" disabled={pagina >= totalPaginas} onClick={() => onPageChange(pagina + 1)}>Proxima</Button></div></div></CardContent></Card>;
+function MovimentacoesCard({
+  movimentacoes,
+  isLoading,
+  total,
+  pagina,
+  totalPaginas,
+  onPageChange,
+  setPage
+}: {
+  movimentacoes: CaixaMovimentacao[];
+  isLoading: boolean;
+  total: number;
+  pagina: number;
+  totalPaginas: number;
+  onPageChange: (pagina: number) => void;
+  setPage: (page: Page, pedido?: PedidoResumo | null) => void;
+}) {
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <CardTitle>Movimentacoes do caixa</CardTitle>
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
+        <Table className="min-w-[1020px]">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Data</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Forma</TableHead>
+              <TableHead>Categoria</TableHead>
+              <TableHead>Descricao</TableHead>
+              <TableHead>Valor</TableHead>
+              <TableHead>Usuario</TableHead>
+              <TableHead>Origem</TableHead>
+              <TableHead>Ação</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && (
+              <TableRow>
+                <TableCell colSpan={9}>Carregando movimentacoes...</TableCell>
+              </TableRow>
+            )}
+            {!isLoading && movimentacoes.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={9}>Nenhuma movimentacao encontrada.</TableCell>
+              </TableRow>
+            )}
+            {!isLoading &&
+              movimentacoes.map((mov) => (
+                <TableRow key={mov.id}>
+                  <TableCell className="whitespace-nowrap">{formatDateTime(mov.movimentadoEm)}</TableCell>
+                  <TableCell>
+                    <Badge tone={mov.tipo === "ENTRADA" ? "success" : "danger"}>
+                      {mov.tipo === "ENTRADA" ? "Entrada" : "Saida"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{formatFormaPagamento(mov.formaPagamento)}</TableCell>
+                  <TableCell className="min-w-36 whitespace-normal">{mov.categoria}</TableCell>
+                  <TableCell className="min-w-64 whitespace-normal">{mov.descricao}</TableCell>
+                  <TableCell className="font-bold">{formatCurrency(mov.valor)}</TableCell>
+                  <TableCell className="min-w-32">{mov.usuario || "-"}</TableCell>
+                  <TableCell>
+                    <Badge tone={mov.origem === "PEDIDO" ? "success" : "warning"}>
+                      {mov.origem === "PEDIDO" ? "Pedido" : "Manual"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {mov.origem === "PEDIDO" && mov.pedidoId && (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setPage("recibo-pedido", {
+                              id: mov.pedidoId!,
+                              tipo: "PEDIDO",
+                              numero: "",
+                              cliente: "",
+                              status: "",
+                              dataPedido: "",
+                              dataEntrega: null,
+                              total: 0,
+                              valorPago: 0,
+                              valorEstornado: 0,
+                              saldoDevedor: 0,
+                              criadoPor: "",
+                              motivoCancelamento: null
+                            } as unknown as PedidoResumo)
+                          }
+                        >
+                          Ver
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setPage("novo-pedido", {
+                              id: mov.pedidoId!,
+                              tipo: "PEDIDO",
+                              numero: "",
+                              cliente: "",
+                              status: "",
+                              dataPedido: "",
+                              dataEntrega: null,
+                              total: 0,
+                              valorPago: 0,
+                              valorEstornado: 0,
+                              saldoDevedor: 0,
+                              criadoPor: "",
+                              motivoCancelamento: null
+                            } as unknown as PedidoResumo)
+                          }
+                        >
+                          Editar
+                        </Button>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+          </TableBody>
+        </Table>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            {total} movimentacao{total === 1 ? "" : "es"} encontradas
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={pagina <= 1} onClick={() => onPageChange(Math.max(1, pagina - 1))}>
+              Anterior
+            </Button>
+            <Button variant="outline" disabled={pagina >= totalPaginas} onClick={() => onPageChange(pagina + 1)}>
+              Proxima
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function FieldInput({ label, register }: { label: string; register: UseFormRegisterReturn }) { return <label><span className="field-label">{label}</span><Input className="mt-2" {...register} /></label>; }

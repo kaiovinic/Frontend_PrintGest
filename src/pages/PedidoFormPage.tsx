@@ -50,6 +50,27 @@ const pedidoSchema = z.object({
   observacao: z.string(),
   outrosItens: z.string(),
   items: z.array(itemSchema)
+}).superRefine((data, ctx) => {
+  if (data.tipo === "Pedido") {
+    if (!data.dataEntrega) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Data de entrega é obrigatória para pedidos",
+        path: ["dataEntrega"]
+      });
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const deliveryDate = new Date(data.dataEntrega + "T00:00:00");
+      if (deliveryDate < today) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "A data de entrega não pode ser anterior à data atual",
+          path: ["dataEntrega"]
+        });
+      }
+    }
+  }
 });
 
 type PedidoFormData = z.infer<typeof pedidoSchema>;
@@ -126,6 +147,13 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
   const [valorRecebidoPedido, setValorRecebidoPedido] = useState("");
   const [valorRecebidoFinalizacao, setValorRecebidoFinalizacao] = useState("");
 
+  // Split payment state
+  const [dividirPagamento, setDividirPagamento] = useState(false);
+  const [formaPagamento2, setFormaPagamento2] = useState("Dinheiro");
+  const [valorPago1, setValorPago1] = useState("");
+  const [valorRecebidoPedido1, setValorRecebidoPedido1] = useState("");
+  const [valorRecebidoPedido2, setValorRecebidoPedido2] = useState("");
+
   // Form
   const { watch, setValue, reset, control, handleSubmit, formState: { errors } } = useForm<PedidoFormData>({
     resolver: zodResolver(pedidoSchema),
@@ -175,11 +203,23 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     : condicaoPagamento === "Parcelado" 
       ? (parcelas[0]?.valor ?? 0) 
       : 0;
+
+  const podeDividirPagamento = (!pedido || (tipoOriginal === "Orçamento" && tipo === "Pedido")) && condicaoPagamento !== "Pagar na Entrega" && valorAPagar > 0;
+
+  const v1 = dividirPagamento ? (valorPago1 !== "" ? parseCurrency(valorPago1) : (valorAPagar / 2)) : valorAPagar;
+  const v2 = dividirPagamento ? Math.max(0, valorAPagar - v1) : 0;
+
   const valorRecebidoPedidoNum = parseCurrency(valorRecebidoPedido);
   const trocoPedido = Math.max(0, valorRecebidoPedidoNum - valorAPagar);
 
   const valorRecebidoFinalizacaoNum = parseCurrency(valorRecebidoFinalizacao);
   const trocoFinalizacao = Math.max(0, valorRecebidoFinalizacaoNum - saldoDevedor);
+
+  const valorRecebidoPedido1Num = parseCurrency(valorRecebidoPedido1);
+  const trocoPedido1 = Math.max(0, valorRecebidoPedido1Num - v1);
+
+  const valorRecebidoPedido2Num = parseCurrency(valorRecebidoPedido2);
+  const trocoPedido2 = Math.max(0, valorRecebidoPedido2Num - v2);
 
   const tipoBloqueado = Boolean(pedido) && tipoOriginal === "Pedido";
   const cancelReasonValido = cancelReason.trim().length >= 10;
@@ -260,8 +300,10 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
       outrosItens: data.outrosItens || null,
       total: totalGeral,
       valorPago: !pedido || (tipoOriginal === "Orçamento" && data.tipo === "Pedido")
-        ? parcelas[0]?.valor ?? 0
+        ? v1
         : valorPagoRegistrado,
+      formaPagamento2: dividirPagamento && v2 > 0 ? formaPagamento2 : null,
+      valorPago2: dividirPagamento && v2 > 0 ? v2 : null,
       itens: data.items
         .filter((item) => item.descricao.trim() || Number(item.quantidade || 0) > 0 || item.tamanho.trim())
         .map((item) => ({
@@ -451,6 +493,11 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setFormaPagamentoFinalizacao("PIX");
     setValorRecebidoPedido("");
     setValorRecebidoFinalizacao("");
+    setDividirPagamento(false);
+    setFormaPagamento2("Dinheiro");
+    setValorPago1("");
+    setValorRecebidoPedido1("");
+    setValorRecebidoPedido2("");
   }
 
   function preencherComDetalhe(detalhe: PedidoDetalhe) {
@@ -465,6 +512,19 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
     setFormaPagamentoFinalizacao(toUiFormaPagamento(detalhe.formaPagamento));
     setValorRecebidoPedido("");
     setValorRecebidoFinalizacao("");
+    
+    const isSplit = detalhe.formaPagamento?.includes(" e ") ?? false;
+    setDividirPagamento(isSplit);
+    if (isSplit && detalhe.formaPagamento) {
+      const parts = detalhe.formaPagamento.split(" e ");
+      setFormaPagamento2(toUiFormaPagamento(parts[1]));
+    } else {
+      setFormaPagamento2("Dinheiro");
+    }
+    setValorPago1("");
+    setValorRecebidoPedido1("");
+    setValorRecebidoPedido2("");
+
     reset({
       cliente: detalhe.cliente,
       empresa: detalhe.empresa ?? "",
@@ -543,7 +603,10 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
             </Select>
           </label>
           <Field label="Data do pedido" value={watch("dataPedido")} onChange={(v) => setValue("dataPedido", v)} type="date" />
-          <Field label="Data de entrega" value={watch("dataEntrega")} onChange={(v) => setValue("dataEntrega", v)} type="date" />
+          <div>
+            <Field label="Data de entrega" value={watch("dataEntrega")} onChange={(v) => setValue("dataEntrega", v)} type="date" />
+            {errors.dataEntrega && <p className="mt-1 text-xs font-semibold text-red-600">{errors.dataEntrega.message}</p>}
+          </div>
           <p className="md:col-span-4 rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm font-semibold text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-200">
             Se salvar como Orçamento, ele aparece na tabela com status Orçado. Ao editar e trocar para Pedido, o orçamento vira pedido. Pedido já aberto não volta para orçamento.
           </p>
@@ -610,7 +673,122 @@ export function PedidoFormPage({ pedido, usuarioId }: { pedido?: PedidoResumo | 
                 </Select>
               </label>
 
-              {formaPagamento === "Dinheiro" && valorAPagar > 0 && (
+              {podeDividirPagamento && (
+                <div className="col-span-2 space-y-3 rounded-lg border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={dividirPagamento}
+                      onChange={(e) => {
+                        setDividirPagamento(e.target.checked);
+                        setValorPago1("");
+                      }}
+                      className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4"
+                    />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Pagar com duas formas de pagamento</span>
+                  </label>
+
+                  {dividirPagamento && (
+                    <div className="grid gap-3 md:grid-cols-2 border-t pt-3 mt-2">
+                      <div className="space-y-3">
+                        <p className="text-xs font-bold text-slate-500">Primeira Parte</p>
+                        <Field
+                          label="Valor 1"
+                          value={valorPago1 || formatCurrency(valorAPagar / 2)}
+                          onChange={(v) => {
+                            const cleanVal = parseCurrency(v);
+                            if (cleanVal <= valorAPagar) {
+                              setValorPago1(maskCurrency(v));
+                              setValorRecebidoPedido1("");
+                            }
+                          }}
+                        />
+                        {watch("formaPagamento") === "Dinheiro" && (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-2 dark:border-slate-800 dark:bg-slate-900/50 mt-2">
+                            <span className="text-[10px] font-bold text-muted-foreground block">Calculadora de Troco (Parte 1)</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <label>
+                                <span className="text-[10px] font-semibold text-muted-foreground">Valor Recebido</span>
+                                <Input
+                                  className="h-7 text-xs mt-1 px-2"
+                                  value={valorRecebidoPedido1}
+                                  onChange={(e) => setValorRecebidoPedido1(maskCurrency(e.target.value))}
+                                  placeholder="R$ 0,00"
+                                />
+                              </label>
+                              <label>
+                                <span className="text-[10px] font-semibold text-muted-foreground">Troco</span>
+                                <Input
+                                  className="h-7 text-xs mt-1 bg-muted font-bold text-emerald-600 dark:text-emerald-400 px-2"
+                                  value={formatCurrency(trocoPedido1)}
+                                  readOnly
+                                />
+                              </label>
+                            </div>
+                            {valorRecebidoPedido1Num > 0 && valorRecebidoPedido1Num >= v1 && (
+                              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                Troco: {formatCurrency(trocoPedido1)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        <p className="text-xs font-bold text-slate-500">Segunda Parte</p>
+                        <label>
+                          <span className="field-label">Segunda forma de pagamento</span>
+                          <Select value={formaPagamento2} onChange={(v) => {
+                            setFormaPagamento2(v);
+                            setValorRecebidoPedido2("");
+                          }}>
+                            <option value="PIX">PIX</option>
+                            <option value="Dinheiro">Dinheiro</option>
+                            <option value="CARTAO_CREDITO">Cartão de crédito</option>
+                            <option value="CARTAO_DEBITO">Cartão de débito</option>
+                          </Select>
+                        </label>
+                        <Field
+                          label="Valor 2 (Calculado)"
+                          value={formatCurrency(v2)}
+                          onChange={() => undefined}
+                          readOnly
+                        />
+                        {formaPagamento2 === "Dinheiro" && (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-2 dark:border-slate-800 dark:bg-slate-900/50 mt-2">
+                            <span className="text-[10px] font-bold text-muted-foreground block">Calculadora de Troco (Parte 2)</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <label>
+                                <span className="text-[10px] font-semibold text-muted-foreground">Valor Recebido</span>
+                                <Input
+                                  className="h-7 text-xs mt-1 px-2"
+                                  value={valorRecebidoPedido2}
+                                  onChange={(e) => setValorRecebidoPedido2(maskCurrency(e.target.value))}
+                                  placeholder="R$ 0,00"
+                                />
+                              </label>
+                              <label>
+                                <span className="text-[10px] font-semibold text-muted-foreground">Troco</span>
+                                <Input
+                                  className="h-7 text-xs mt-1 bg-muted font-bold text-emerald-600 dark:text-emerald-400 px-2"
+                                  value={formatCurrency(trocoPedido2)}
+                                  readOnly
+                                />
+                              </label>
+                            </div>
+                            {valorRecebidoPedido2Num > 0 && valorRecebidoPedido2Num >= v2 && (
+                              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                Troco: {formatCurrency(trocoPedido2)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {formaPagamento === "Dinheiro" && valorAPagar > 0 && !dividirPagamento && (
                 <div className="col-span-2 rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2 dark:border-slate-800 dark:bg-slate-900/50">
                   <span className="text-xs font-bold text-muted-foreground block">Calculadora de Troco</span>
                   <div className="grid grid-cols-2 gap-2">
@@ -947,12 +1125,16 @@ function toUiCondicaoPagamento(value: string | null): CondicaoPagamento {
 }
 
 function formatFormaPagamento(value: string) {
+  if (!value) return "";
   const labels: Record<string, string> = {
     DINHEIRO: "Dinheiro",
     PIX: "PIX",
     CARTAO_CREDITO: "Cartão de crédito",
     CARTAO_DEBITO: "Cartão de débito"
   };
+  if (value.includes(" e ")) {
+    return value.split(" e ").map(v => labels[v.trim()] ?? v.trim()).join(" e ");
+  }
   return labels[value] ?? value;
 }
 

@@ -12,6 +12,7 @@ export type CaixaResumo = {
 
 export type CaixaMovimentacao = {
   id: string;
+  pedidoId?: number | null;
   tipo: "ENTRADA" | "SAIDA";
   formaPagamento: string;
   categoria: string;

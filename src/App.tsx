@@ -153,7 +153,7 @@ export default function App() {
       {page === "recibo-pedido" && <PedidoReciboPage pedido={selectedPedido} />}
       {page === "editar-orcamento" && <EditarOrcamentoPage />}
       {page === "estoque" && <EstoquePage usuarioId={user.usuarioId} />}
-      {page === "caixa" && <CaixaPage usuarioId={user.usuarioId} />}
+      {page === "caixa" && <CaixaPage usuarioId={user.usuarioId} setPage={setPage} />}
       {page === "financeiro" && <FinanceiroPage usuarioId={user.usuarioId} />}
       {page === "usuarios" && <UsuariosPage />}
       {page === "logs" && <LogsPage />}

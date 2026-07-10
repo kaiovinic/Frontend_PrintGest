@@ -90,6 +90,8 @@ export type PedidoPayload = {
   total: number;
   valorPago: number;
   itens: PedidoItemPayload[];
+  formaPagamento2?: string | null;
+  valorPago2?: number | null;
 };
 
 export type PedidoItemPayload = {
